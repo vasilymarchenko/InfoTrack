@@ -1,0 +1,79 @@
+using InfoTrack.Application.Ports;
+using InfoTrack.Domain;
+
+namespace InfoTrack.Application.Services;
+
+public class ReportBuilder : IReportBuilder
+{
+    private readonly int _coverageGapThreshold;
+
+    public ReportBuilder(int coverageGapThreshold = 0)
+    {
+        _coverageGapThreshold = coverageGapThreshold;
+    }
+
+    public SearchReport Build(SearchResult result)
+    {
+        var outcomes = result.LocationOutcomes;
+        var unique = result.UniqueSolicitors;
+
+        var summary = new RunSummary(
+            TotalLocationsRequested: outcomes.Count,
+            SuccessfulLocations: outcomes.Count(o => o.Status == LocationOutcomeStatus.Success),
+            EmptyLocations: outcomes.Count(o => o.Status == LocationOutcomeStatus.Empty),
+            UnavailableLocations: outcomes.Count(o => o.Status == LocationOutcomeStatus.Unavailable),
+            ErrorLocations: outcomes.Count(o => o.Status == LocationOutcomeStatus.Error),
+            TotalUniqueSolicitors: unique.Count,
+            RunAtUtc: result.RunAtUtc);
+
+        var locationSummaries = outcomes
+            .Select(o => new LocationSummary(o.Location, o.Status, o.Solicitors.Count, o.ErrorMessage))
+            .ToList();
+
+        var topFirms = unique
+            .Where(s => s.ReviewCount.HasValue)
+            .OrderByDescending(s => s.ReviewCount)
+            .Take(10)
+            .Select(s => new FirmRanking(s.FirmName, s.SearchedLocation, s.ReviewCount))
+            .ToList();
+
+        var multiLocationFirms = unique
+            .GroupBy(s => Normalise(s.FirmName))
+            .Where(g => g.Select(s => s.SearchedLocation).Distinct().Count() >= 2)
+            .Select(g => new MultiLocationFirm(
+                g.Key,
+                g.Select(s => s.SearchedLocation).Distinct().Order().ToList(),
+                g.Select(s => s.SearchedLocation).Distinct().Count()))
+            .OrderByDescending(f => f.LocationCount)
+            .ToList();
+
+        var coverageGaps = outcomes
+            .Where(o => o.Solicitors.Count <= _coverageGapThreshold)
+            .Select(o => new CoverageGap(o.Location, o.Solicitors.Count))
+            .ToList();
+
+        var contactability = BuildContactability(unique);
+
+        return new SearchReport(summary, locationSummaries, topFirms, multiLocationFirms, coverageGaps, contactability);
+    }
+
+    private static Contactability BuildContactability(IReadOnlyList<Solicitor> firms)
+    {
+        int total = firms.Count;
+        int withPhone = firms.Count(f => !string.IsNullOrWhiteSpace(f.Phone));
+        int withWebsite = firms.Count(f => !string.IsNullOrWhiteSpace(f.WebsiteUrl));
+        int withEither = firms.Count(f => !string.IsNullOrWhiteSpace(f.Phone) || !string.IsNullOrWhiteSpace(f.WebsiteUrl));
+
+        return new Contactability(
+            TotalFirms: total,
+            WithPhone: withPhone,
+            WithWebsite: withWebsite,
+            WithPhoneOrWebsite: withEither,
+            PercentWithPhone: total == 0 ? 0 : Math.Round(withPhone * 100.0 / total, 1),
+            PercentWithWebsite: total == 0 ? 0 : Math.Round(withWebsite * 100.0 / total, 1),
+            PercentWithPhoneOrWebsite: total == 0 ? 0 : Math.Round(withEither * 100.0 / total, 1));
+    }
+
+    private static string Normalise(string name) =>
+        name.Trim().ToUpperInvariant().Replace("  ", " ");
+}

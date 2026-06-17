@@ -1,0 +1,53 @@
+@baseUrl = http://localhost:5194
+
+### Health check
+GET {{baseUrl}}/health
+
+###
+
+### Get supported locations
+GET {{baseUrl}}/api/locations
+Accept: application/json
+
+###
+
+### Run search - default locations
+POST {{baseUrl}}/api/searches
+Content-Type: application/json
+
+{
+  "locations": ["London", "Birmingham", "Leeds", "Manchester", "Bristol", "Edinburgh", "Cardiff", "Belfast"]
+}
+
+###
+
+### Run search - custom locations
+POST {{baseUrl}}/api/searches
+Content-Type: application/json
+
+{
+  "locations": ["London", "Birmingham", "Leeds"],
+  "areaOfLaw": "Conveyancing"
+}
+
+###
+
+### Run search - single location
+POST {{baseUrl}}/api/searches
+Content-Type: application/json
+
+{
+  "locations": ["London"]
+}
+
+###
+
+### Run search - includes unavailable location (Bradford)
+POST {{baseUrl}}/api/searches
+Content-Type: application/json
+
+{
+  "locations": ["London", "Bradford", "Leeds"]
+}
+
+###
