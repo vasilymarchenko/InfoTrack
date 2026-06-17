@@ -1,4 +1,5 @@
 using System.Reflection;
+using InfoTrack.Domain;
 using InfoTrack.Infrastructure.Parsing;
 
 namespace InfoTrack.Tests.Infrastructure.Parsing;
@@ -88,6 +89,42 @@ public class SolicitorsComConveyancingParserTests
         var bdCount = withPostcode.Count(s => s.Postcode!.StartsWith("BD", StringComparison.OrdinalIgnoreCase));
         Assert.True(bdCount >= withPostcode.Count / 2,
             $"Expected majority BD postcodes; got {bdCount} BD out of {withPostcode.Count} with postcodes");
+    }
+
+    [Fact]
+    public void Parse_BradfordFixture_TierBreakdownIs4Featured19Standard()
+    {
+        var html = LoadFixture("conveyancing+bradford.html");
+        var results = Parser.Parse(html, "bradford");
+
+        Assert.Equal(4,  results.Count(s => s.Tier == ListingTier.Featured));
+        Assert.Equal(19, results.Count(s => s.Tier == ListingTier.Standard));
+    }
+
+    [Fact]
+    public void Parse_BradfordFixture_SpotCheck_MorrishIsFeaturedWithLogo()
+    {
+        var html = LoadFixture("conveyancing+bradford.html");
+        var results = Parser.Parse(html, "bradford");
+
+        var firm = results.FirstOrDefault(s => s.FirmName.Contains("Morrish"));
+        Assert.NotNull(firm);
+        Assert.Equal(ListingTier.Featured, firm.Tier);
+        Assert.NotNull(firm.LogoUrl);
+        Assert.NotNull(firm.EnquiryUrl);
+    }
+
+    [Fact]
+    public void Parse_BradfordFixture_SpotCheck_SchofieldSweeneyIsStandard()
+    {
+        var html = LoadFixture("conveyancing+bradford.html");
+        var results = Parser.Parse(html, "bradford");
+
+        var firm = results.FirstOrDefault(s => s.FirmName.Contains("Schofield"));
+        Assert.NotNull(firm);
+        Assert.Equal(ListingTier.Standard, firm.Tier);
+        Assert.Null(firm.LogoUrl);
+        Assert.Null(firm.EnquiryUrl);
     }
 
     // ── 404 body — empty list, no exception ───────────────────────────────────

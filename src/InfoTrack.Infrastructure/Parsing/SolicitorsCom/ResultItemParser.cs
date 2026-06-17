@@ -40,6 +40,8 @@ internal static class ResultItemParser
         var listItemSlice = HtmlScanner.Section(block, "ul", "list-item");
         var (websiteUrl, enquiryUrl) = ContactLinkClassifier.Classify(listItemSlice);
 
+        var tier = DetectTier(block);
+
         return new Solicitor(
             FirmName: name,
             SearchedLocation: searchedLocation,
@@ -53,7 +55,17 @@ internal static class ResultItemParser
             ReviewCount: reviewCount,
             Description: description,
             LogoUrl: logoUrl,
+            Tier: tier,
             ScrapedAtUtc: scrapedAt);
+    }
+
+    // item-small is only in the opening tag's class attribute, so we look before the first '>'.
+    private static ListingTier DetectTier(string block)
+    {
+        var tagEnd = block.IndexOf('>');
+        return tagEnd > 0 && block[..tagEnd].Contains("item-small", StringComparison.OrdinalIgnoreCase)
+            ? ListingTier.Standard
+            : ListingTier.Featured;
     }
 
     private static string? ExtractPhone(string block)

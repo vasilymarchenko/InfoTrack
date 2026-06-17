@@ -1,3 +1,4 @@
+using InfoTrack.Domain;
 using InfoTrack.Infrastructure.Parsing.SolicitorsCom;
 
 namespace InfoTrack.Tests.Infrastructure.Parsing.SolicitorsCom;
@@ -25,6 +26,15 @@ public class ResultItemParserTests
         </div>
         """;
 
+    // Compact block shaped like the Bradford fixture (Schofield Sweeney style).
+    private const string SmallBlock = """
+        <div class="result-item item-small">
+            <span class="h2">Schofield Sweeney<span class="rev-results">&nbsp;(40)</span></span>
+            <a href="/schofield-sweeney.html" class="link-map"><address>Church Bank House, Church Bank, Bradford, Yorkshire BD1 4DY</address></a>
+            <a class="tel" style="padding:0px 0px 0px 20px;" rel="noindex" href="tel:01274350800">01274 350 800</a>
+        </div>
+        """;
+
     // Minimal block: only a name, all optionals absent
     private const string NameOnlyBlock = """
         <div class="result-item">
@@ -42,7 +52,7 @@ public class ResultItemParserTests
     // ── Full block — all fields ────────────────────────────────────────────────
 
     [Fact]
-    public void Parse_FullBlock_ExtractsAllFields()
+    public void Parse_FullBlock_ExtractsAllFieldsAndTierIsFeatured()
     {
         var result = ResultItemParser.Parse(FullBlock, "london", ScrapedAt);
 
@@ -63,6 +73,26 @@ public class ResultItemParserTests
         Assert.Contains("Aspen Morris Solicitors", result.Description);
         Assert.Equal("london", result.SearchedLocation);
         Assert.Equal(ScrapedAt, result.ScrapedAtUtc);
+        Assert.Equal(ListingTier.Featured, result.Tier);
+    }
+
+    // ── Small block ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Parse_SmallBlock_TierIsStandardAndCoreFieldsExtracted()
+    {
+        var result = ResultItemParser.Parse(SmallBlock, "bradford", ScrapedAt);
+
+        Assert.NotNull(result);
+        Assert.Equal("Schofield Sweeney", result.FirmName);
+        Assert.Equal(ListingTier.Standard, result.Tier);
+        Assert.Equal("01274350800", result.Phone);
+        Assert.Equal("BD1 4DY", result.Postcode);
+        Assert.Equal(40, result.ReviewCount);
+        Assert.Equal("https://www.solicitors.com/schofield-sweeney.html", result.ProfileUrl);
+        Assert.Null(result.LogoUrl);
+        Assert.Null(result.WebsiteUrl);
+        Assert.Null(result.EnquiryUrl);
     }
 
     // ── Name-only block ────────────────────────────────────────────────────────
@@ -83,6 +113,7 @@ public class ResultItemParserTests
         Assert.Null(result.LogoUrl);
         Assert.Null(result.Description);
         Assert.Equal(string.Empty, result.Address);
+        Assert.Equal(ListingTier.Featured, result.Tier);
     }
 
     // ── No-name block ──────────────────────────────────────────────────────────
