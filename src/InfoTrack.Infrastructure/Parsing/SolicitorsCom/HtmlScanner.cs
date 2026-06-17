@@ -9,6 +9,43 @@ internal static class HtmlScanner
     private static readonly RegexOptions Opts =
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled;
 
+    private static readonly Regex OpenDiv  = new(@"<div[\s>]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex CloseDiv = new(@"</div>",    RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    internal static int FindDivBlockEnd(string html, int start)
+    {
+        var depth = 0;
+        var pos = start;
+
+        while (pos < html.Length)
+        {
+            var nextOpen  = OpenDiv.Match(html, pos);
+            var nextClose = CloseDiv.Match(html, pos);
+
+            if (!nextOpen.Success && !nextClose.Success)
+                break;
+
+            int openIdx  = nextOpen.Success  ? nextOpen.Index  : int.MaxValue;
+            int closeIdx = nextClose.Success ? nextClose.Index : int.MaxValue;
+
+            if (openIdx < closeIdx)
+            {
+                depth++;
+                pos = nextOpen.Index + nextOpen.Length;
+            }
+            else
+            {
+                depth--;
+                pos = nextClose.Index + nextClose.Length;
+
+                if (depth == 0)
+                    return pos;
+            }
+        }
+
+        return -1;
+    }
+
     internal static string? Attr(string block, string tag, string? cls, string attr)
     {
         var openTag = FindOpenTag(block, tag, cls, 0);
