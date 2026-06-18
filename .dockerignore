@@ -1,0 +1,8 @@
+**/.git
+**/.vs
+**/.Personal
+**/bin
+**/obj
+tests/
+*.md
+!src/**/*.md
