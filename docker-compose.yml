@@ -1,4 +1,18 @@
 services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: infotrack
+      POSTGRES_PASSWORD: infotrack
+      POSTGRES_DB: infotrack
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infotrack -d infotrack"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     build:
       context: .
@@ -8,6 +22,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: "Host=db;Port=5432;Database=infotrack;Username=infotrack;Password=infotrack"
+    depends_on:
+      db:
+        condition: service_healthy
 
-  # Phase 2: add a `db` service (Postgres) here and set
-  # ConnectionStrings__Postgres on `api`, with depends_on + healthcheck.
+volumes:
+  pgdata:

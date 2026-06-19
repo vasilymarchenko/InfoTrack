@@ -38,7 +38,7 @@ public class ReportBuilder : IReportBuilder
             .ToList();
 
         var multiLocationFirms = unique
-            .GroupBy(s => Normalise(s.FirmName))
+            .GroupBy(s => FirmIdentity.NormaliseName(s.FirmName))
             .Where(g => g.Select(s => s.SearchedLocation).Distinct().Count() >= 2)
             .Select(g => new MultiLocationFirm(
                 g.Key,
@@ -74,6 +74,4 @@ public class ReportBuilder : IReportBuilder
             PercentWithPhoneOrWebsite: total == 0 ? 0 : Math.Round(withEither * 100.0 / total, 1));
     }
 
-    private static string Normalise(string name) =>
-        name.Trim().ToUpperInvariant().Replace("  ", " ");
 }

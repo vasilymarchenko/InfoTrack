@@ -10,6 +10,7 @@ public class SolicitorSearchService : ISolicitorSearchService
     private readonly IListingFetcher _fetcher;
     private readonly IListingParser _parser;
     private readonly IReportBuilder _reportBuilder;
+    private readonly ISearchRunRepository _repository;
     private readonly int _maxParallelism;
 
     public SolicitorSearchService(
@@ -17,12 +18,14 @@ public class SolicitorSearchService : ISolicitorSearchService
         IListingFetcher fetcher,
         IListingParser parser,
         IReportBuilder reportBuilder,
+        ISearchRunRepository repository,
         int maxParallelism = 4)
     {
         _resolver = resolver;
         _fetcher = fetcher;
         _parser = parser;
         _reportBuilder = reportBuilder;
+        _repository = repository;
         _maxParallelism = maxParallelism;
     }
 
@@ -50,7 +53,9 @@ public class SolicitorSearchService : ISolicitorSearchService
             UniqueSolicitors: uniqueSolicitors);
 
         var report = _reportBuilder.Build(result);
-        return new SearchResponse(result, report);
+        // SaveAsync propagates on failure — persistence is the point of Phase 2.
+        var runId = await _repository.SaveAsync(result, ct);
+        return new SearchResponse(result, report, runId);
     }
 
     private async Task<LocationOutcome> FetchLocationAsync(
@@ -90,20 +95,10 @@ public class SolicitorSearchService : ISolicitorSearchService
 
         foreach (var s in solicitors)
         {
-            var key = BranchKey(s);
-            if (seen.Add(key))
+            if (seen.Add(FirmIdentity.BranchKey(s)))
                 result.Add(s);
         }
 
         return result;
-    }
-
-    private static string BranchKey(Solicitor s)
-    {
-        var name = s.FirmName.Trim().ToUpperInvariant();
-        var discriminator = s.Postcode?.Trim().ToUpperInvariant()
-                         ?? s.Phone?.Trim()
-                         ?? string.Empty;
-        return $"{name}|{discriminator}";
     }
 }

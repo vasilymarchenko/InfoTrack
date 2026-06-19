@@ -4,6 +4,8 @@ using InfoTrack.Application.Services;
 using InfoTrack.Infrastructure;
 using InfoTrack.Infrastructure.Configuration;
 using InfoTrack.Infrastructure.Parsing;
+using InfoTrack.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 
@@ -38,7 +40,12 @@ builder.Services.AddSingleton<IReportBuilder>(sp =>
     return new ReportBuilder(opts.CoverageGapThreshold);
 });
 
-// Scoped so it captures the scoped IListingFetcher (typed HttpClient) safely.
+var cs = builder.Configuration.GetConnectionString("Postgres");
+builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(cs));
+builder.Services.AddScoped<ISearchRunRepository, EfSearchRunRepository>();
+builder.Services.AddSingleton<RunComparer>();
+
+// Scoped so it captures the scoped IListingFetcher (typed HttpClient) and ISearchRunRepository safely.
 builder.Services.AddScoped<ISolicitorSearchService>(sp =>
 {
     var opts = sp.GetRequiredService<IOptions<ScraperOptions>>().Value;
@@ -47,6 +54,7 @@ builder.Services.AddScoped<ISolicitorSearchService>(sp =>
         sp.GetRequiredService<IListingFetcher>(),
         sp.GetRequiredService<IListingParser>(),
         sp.GetRequiredService<IReportBuilder>(),
+        sp.GetRequiredService<ISearchRunRepository>(),
         opts.MaxParallelism);
 });
 
@@ -55,6 +63,13 @@ builder.Services.AddScoped<ISolicitorSearchService>(sp =>
 // builder.Services.AddCors(options => options.AddDefaultPolicy(policy => { ... }));
 
 var app = builder.Build();
+
+// Apply EF migrations on startup (for simplicity in this demo; consider more robust strategies for production apps).
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+}
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
