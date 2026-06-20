@@ -20,51 +20,45 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
             RequestedLocations = result.LocationOutcomes.Select(o => o.Location).ToList()
         };
 
-        // 1. Collect distinct firm identities per location from all SUCCESS outcomes.
-        //    Within a location, first occurrence of a key wins (de-dup).
-        var perLocationFirms = new Dictionary<string, Dictionary<string, Solicitor>>(StringComparer.OrdinalIgnoreCase);
-        var reprByKey = new Dictionary<string, Solicitor>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, Solicitor> foundByKey = result.UniqueSolicitors
+            .ToDictionary(FirmIdentity.BranchKey, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var o in result.LocationOutcomes.Where(o => o.Status == LocationOutcomeStatus.Success))
-        {
-            var byKey = new Dictionary<string, Solicitor>(StringComparer.OrdinalIgnoreCase);
-            foreach (var s in o.Solicitors)
-            {
-                var key = FirmIdentity.BranchKey(s);
-                byKey.TryAdd(key, s);
-                reprByKey.TryAdd(key, s);
-            }
-            perLocationFirms[o.Location] = byKey;
-        }
+        // This is needed to build sightings — which firms appeared in which location
+        Dictionary<string, Dictionary<string, Solicitor>> foundByLocation = result.LocationOutcomes
+            .Where(o => o.Status == LocationOutcomeStatus.Success)
+            .ToDictionary(
+                o => o.Location,
+                o => o.Solicitors
+                    .GroupBy(FirmIdentity.BranchKey, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase);
 
-        var allKeys = reprByKey.Keys.ToList();
+        var allKeys = foundByKey.Keys.ToList();
 
-        // 2. Load all existing firms for these keys in one query.
-        var existing = await db.Firms
+        // 1. Load all existing firms for these keys in one query.
+        var existingFirms = await db.Firms
             .Where(f => allKeys.Contains(f.IdentityKey))
             .ToListAsync(ct);
-        var firmByKey = existing.ToDictionary(f => f.IdentityKey, StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, FirmEntity> existingFirmByKey = existingFirms.ToDictionary(f => f.IdentityKey, StringComparer.OrdinalIgnoreCase);
 
-        // 3. Upsert firms: refresh latest attributes and LastSeenAt; create new ones.
-        //    One FirmEntity per key — national chains span locations but get one row.
+        // 2. Upsert firms: refresh latest attributes and LastSeenAt; create new ones.
         foreach (var key in allKeys)
         {
-            var repr = reprByKey[key];
-            if (firmByKey.TryGetValue(key, out var firm))
+            var solicitorData = foundByKey[key];
+            if (existingFirmByKey.TryGetValue(key, out var firm))
             {
                 firm.LastSeenAt = runAtUtc;
-                RefreshAttributes(firm, repr);
+                RefreshAttributes(firm, solicitorData);
             }
             else
             {
-                firm = NewFirmEntity(repr, key, runAtUtc);
+                firm = NewFirmEntity(solicitorData, key, runAtUtc);
                 db.Firms.Add(firm);
-                firmByKey[key] = firm;
+                existingFirmByKey[key] = firm;
             }
         }
 
-        // 4. Build a LocationOutcomeEntity for every requested location.
-        //    Only Success locations get sightings.
+        // 3. Build a LocationOutcomeEntity for every requested location.
         foreach (var o in result.LocationOutcomes)
         {
             var loc = new LocationOutcomeEntity
@@ -78,13 +72,13 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
             };
 
             if (o.Status == LocationOutcomeStatus.Success &&
-                perLocationFirms.TryGetValue(o.Location, out var byKey))
+                foundByLocation.TryGetValue(o.Location, out var solicitorsByKey))
             {
-                foreach (var (key, s) in byKey)
+                foreach (var (key, s) in solicitorsByKey)
                     loc.Sightings.Add(new SightingEntity
                     {
                         Id = Guid.NewGuid(),
-                        FirmId = firmByKey[key].Id,
+                        FirmId = existingFirmByKey[key].Id,
                         ReviewCount = s.ReviewCount
                     });
             }
@@ -133,7 +127,6 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
             .FirstOrDefaultAsync(ct);
     }
 
-    // --- mapping ---
 
     private static StoredRun MapToStoredRun(SearchRunEntity run) => new(
         RunId: run.Id,
@@ -164,7 +157,6 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
         Tier: ListingTier.Featured,   // Tier is not persisted; default to Featured on read-back
         ScrapedAtUtc: scrapedAt);
 
-    // --- firm helpers ---
 
     private static FirmEntity NewFirmEntity(Solicitor s, string key, DateTimeOffset now) => new()
     {
