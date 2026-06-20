@@ -144,7 +144,6 @@ Response shape:
     "locationSummaries": [ "..." ],
     "topFirmsByReviewCount": [ "..." ],
     "multiLocationFirms": [ "..." ],
-    "coverageGaps": [ "..." ],
     "contactability": { "..." }
   }
 }
@@ -225,7 +224,6 @@ Settings are in `src/InfoTrack.Api/appsettings.json` under the `Scraper` section
 | `Scraper:TimeoutSeconds` | Per-request timeout | `15` |
 | `Scraper:MaxParallelism` | Concurrent location fetches | `4` |
 | `Scraper:DefaultLocations` | Cities returned by `GET /api/locations` | 8 UK cities (see `appsettings.json`) |
-| `Scraper:CoverageGapThreshold` | Locations with firm count ≤ this appear in coverage gaps | `1` |
 | `ConnectionStrings:Postgres` | Postgres connection string | _(not set — required)_ |
 
 The connection string key is `ConnectionStrings:Postgres`. When running via Docker Compose the value is injected as the environment variable `ConnectionStrings__Postgres` (double-underscore notation). To override locally:

@@ -10,9 +10,5 @@ public sealed class ScraperOptions
 
     public int TimeoutSeconds { get; set; } = 15;
 
-    public int MaxParallelism { get; set; } = 4;
-
     public string[] DefaultLocations { get; set; } = Array.Empty<string>();
-
-    public int CoverageGapThreshold { get; set; } = 1;
 }

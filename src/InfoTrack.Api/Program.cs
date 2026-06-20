@@ -1,4 +1,5 @@
 using InfoTrack.Api;
+using InfoTrack.Application.Configuration;
 using InfoTrack.Application.Ports;
 using InfoTrack.Application.Services;
 using InfoTrack.Infrastructure;
@@ -14,6 +15,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<ScraperOptions>(
     builder.Configuration.GetSection(ScraperOptions.SectionName));
 
+builder.Services.Configure<SearchServiceOptions>(
+    builder.Configuration.GetSection(SearchServiceOptions.SectionName));
+
 builder.Services.AddOpenApi();
 
 builder.Services.AddProblemDetails();
@@ -26,37 +30,19 @@ builder.Services.AddHttpClient<IListingFetcher, HttpListingFetcher>((sp, client)
     client.DefaultRequestHeaders.UserAgent.ParseAdd(opts.UserAgent);
 });
 
-builder.Services.AddSingleton<ILocationResolver>(sp =>
-{
-    var opts = sp.GetRequiredService<IOptions<ScraperOptions>>().Value;
-    return new LocationResolver(opts);
-});
+builder.Services.AddSingleton<ILocationResolver, LocationResolver>();
 
 builder.Services.AddSingleton<IListingParser, SolicitorsComConveyancingParser>();
 
-builder.Services.AddSingleton<IReportBuilder>(sp =>
-{
-    var opts = sp.GetRequiredService<IOptions<ScraperOptions>>().Value;
-    return new ReportBuilder(opts.CoverageGapThreshold);
-});
+builder.Services.AddSingleton<IReportBuilder, ReportBuilder>();
 
 var cs = builder.Configuration.GetConnectionString("Postgres");
 builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(cs));
 builder.Services.AddScoped<ISearchRunRepository, EfSearchRunRepository>();
 builder.Services.AddSingleton<RunComparer>();
 
-// Scoped so it captures the scoped IListingFetcher (typed HttpClient) and ISearchRunRepository safely.
-builder.Services.AddScoped<ISolicitorSearchService>(sp =>
-{
-    var opts = sp.GetRequiredService<IOptions<ScraperOptions>>().Value;
-    return new SolicitorSearchService(
-        sp.GetRequiredService<ILocationResolver>(),
-        sp.GetRequiredService<IListingFetcher>(),
-        sp.GetRequiredService<IListingParser>(),
-        sp.GetRequiredService<IReportBuilder>(),
-        sp.GetRequiredService<ISearchRunRepository>(),
-        opts.MaxParallelism);
-});
+// Scoped so it captures the scoped IListingFetcher (typed HttpClient) safely.
+builder.Services.AddScoped<ISolicitorSearchService, SolicitorSearchService>();
 
 // CORS — not configured in Phase 1 (no browser client yet).
 // Configured in Phase 3 when the frontend is introduced.
