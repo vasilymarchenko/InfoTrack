@@ -1,6 +1,8 @@
 using System.Text.RegularExpressions;
 using InfoTrack.Application.Ports;
+using InfoTrack.Domain;
 using InfoTrack.Infrastructure.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace InfoTrack.Infrastructure;
 
@@ -12,10 +14,10 @@ public sealed class LocationResolver : ILocationResolver
 
     private readonly string _baseUrl;
 
-    public LocationResolver(ScraperOptions options)
+    public LocationResolver(IOptions<ScraperOptions> options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        _baseUrl = options.BaseUrl.TrimEnd('/');
+        _baseUrl = options.Value.BaseUrl.TrimEnd('/');
     }
 
     public ResolvedLocation Resolve(string locationName)
@@ -25,7 +27,7 @@ public sealed class LocationResolver : ILocationResolver
 
         var name = locationName.Trim();
         var slug = Slugify(name);
-        var url = new Uri($"{_baseUrl}/conveyancing+{slug}.html");
+        var url = new Uri($"{_baseUrl}/{AreasOfLaw.Conveyancing.ToLowerInvariant()}+{slug}.html"); // conveyancing is hardcoded for this MVP
 
         return new ResolvedLocation(name, slug, url);
     }

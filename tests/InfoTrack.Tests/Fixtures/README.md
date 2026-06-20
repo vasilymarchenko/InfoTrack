@@ -45,14 +45,6 @@ Spot-check firm (London fixture, block 0): **Aspen Morris Solicitors**
   have no logo).
 - **Postcode:** parse from the `<address>` text with a UK-postcode regex.
 
-## Banner-block (the bug this rework fixes)
-
-In the London fixture, `<div class="banner-block">` appears as a **sibling** of `result-item` divs
-inside `result-section`. The old `SplitBlocks` sliced from one `result-item` start to the next, so
-the banner HTML was swallowed into the preceding firm's block — `ExtractWebsite` could then pick up
-the banner's URL as the firm's website. The new `ResultItemSegmenter` depth-balances each `<div>`
-so each block ends exactly at its own closing `</div>`; the banner is never included.
-
 ## How to re-capture
 
 PowerShell (handles the Windows cert store; `curl` hit revocation-check failures):

@@ -5,12 +5,6 @@ namespace InfoTrack.Application.Services;
 
 public class ReportBuilder : IReportBuilder
 {
-    private readonly int _coverageGapThreshold;
-
-    public ReportBuilder(int coverageGapThreshold = 0)
-    {
-        _coverageGapThreshold = coverageGapThreshold;
-    }
 
     public SearchReport Build(SearchResult result)
     {
@@ -47,14 +41,9 @@ public class ReportBuilder : IReportBuilder
             .OrderByDescending(f => f.LocationCount)
             .ToList();
 
-        var coverageGaps = outcomes
-            .Where(o => o.Solicitors.Count <= _coverageGapThreshold)
-            .Select(o => new CoverageGap(o.Location, o.Solicitors.Count))
-            .ToList();
-
         var contactability = BuildContactability(unique);
 
-        return new SearchReport(summary, locationSummaries, topFirms, multiLocationFirms, coverageGaps, contactability);
+        return new SearchReport(summary, locationSummaries, topFirms, multiLocationFirms, contactability);
     }
 
     private static Contactability BuildContactability(IReadOnlyList<Solicitor> firms)

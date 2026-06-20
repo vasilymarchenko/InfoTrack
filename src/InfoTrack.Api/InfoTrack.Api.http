@@ -1,5 +1,7 @@
-# @baseUrl = http://localhost:5194
-@baseUrl = http://localhost:8080
+### REST Client extension is required: https://marketplace.visualstudio.com/items?itemName=humao.rest-client 
+### baseUrl comes from "rest-client.environmentVariables"
+### Environments are defined in .vscode/settings.json
+### switch environment using shortcut Ctrl+Alt+E(Cmd+Alt+E for macOS), or press F1 and then select/type Rest Client: Switch Environment
 
 ### Health check
 GET {{baseUrl}}/health
@@ -12,23 +14,12 @@ Accept: application/json
 
 ###
 
-### Run search - default locations
+### Run search - multiple locations
 POST {{baseUrl}}/api/searches
 Content-Type: application/json
 
 {
-  "locations": ["London", "Birmingham", "Leeds", "Manchester", "Bristol", "Edinburgh", "Cardiff", "Belfast"]
-}
-
-###
-
-### Run search - custom locations
-POST {{baseUrl}}/api/searches
-Content-Type: application/json
-
-{
-  "locations": ["London", "Birmingham", "Leeds"],
-  "areaOfLaw": "Conveyancing"
+  "locations": ["Manchester", "Bristol", "Edinburgh", "Cardiff", "Belfast"]
 }
 
 ###
@@ -43,12 +34,12 @@ Content-Type: application/json
 
 ###
 
-### Run search - includes unavailable location (Bradford)
+### Run search - includes not found location
 POST {{baseUrl}}/api/searches
 Content-Type: application/json
 
 {
-  "locations": ["London", "Bradford", "Leeds"]
+  "locations": ["London", "Nowhere", "Leeds"]
 }
 
 ###

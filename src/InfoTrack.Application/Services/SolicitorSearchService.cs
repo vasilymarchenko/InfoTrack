@@ -1,6 +1,8 @@
+using InfoTrack.Application.Configuration;
 using InfoTrack.Application.DTOs;
 using InfoTrack.Application.Ports;
 using InfoTrack.Domain;
+using Microsoft.Extensions.Options;
 
 namespace InfoTrack.Application.Services;
 
@@ -17,35 +19,35 @@ public class SolicitorSearchService : ISolicitorSearchService
         IListingFetcher fetcher,
         IListingParser parser,
         IReportBuilder reportBuilder,
-        int maxParallelism = 4)
+        IOptions<SearchServiceOptions> options)
     {
         _resolver = resolver;
         _fetcher = fetcher;
         _parser = parser;
         _reportBuilder = reportBuilder;
-        _maxParallelism = maxParallelism;
+        _maxParallelism = options.Value.MaxParallelism;
     }
 
     public async Task<SearchResponse> SearchAsync(SearchRequest request, CancellationToken ct)
     {
-        if (request.Locations == null || request.Locations.Count == 0)
-            throw new ArgumentException("At least one location is required.", nameof(request));
-
         var locations = request.Locations
             .Select(l => l.Trim())
             .Where(l => l.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        if (locations.Count == 0)
+            throw new ArgumentException("At least one valid location is required.", nameof(request));
+
         var throttle = new SemaphoreSlim(_maxParallelism);
-        var tasks = locations.Select(loc => FetchLocationAsync(loc, request.AreaOfLaw, throttle, ct));
+        var tasks = locations.Select(loc => FetchLocationAsync(loc, throttle, ct));
         var outcomes = await Task.WhenAll(tasks);
 
         var uniqueSolicitors = Deduplicate(outcomes.SelectMany(o => o.Solicitors).ToList());
 
         var result = new SearchResult(
             RunAtUtc: DateTimeOffset.UtcNow,
-            AreaOfLaw: request.AreaOfLaw,
+            AreaOfLaw: AreasOfLaw.Conveyancing,
             LocationOutcomes: outcomes,
             UniqueSolicitors: uniqueSolicitors);
 
@@ -54,7 +56,7 @@ public class SolicitorSearchService : ISolicitorSearchService
     }
 
     private async Task<LocationOutcome> FetchLocationAsync(
-        string location, string areaOfLaw, SemaphoreSlim throttle, CancellationToken ct)
+        string location, SemaphoreSlim throttle, CancellationToken ct)
     {
         await throttle.WaitAsync(ct);
         try
@@ -63,19 +65,18 @@ public class SolicitorSearchService : ISolicitorSearchService
             var fetch = await _fetcher.FetchAsync(resolved.Url, ct);
 
             if (fetch.IsNotFound)
-                return new LocationOutcome(location, resolved.Url, LocationOutcomeStatus.Unavailable, Array.Empty<Solicitor>(), "Page not found.");
+                return LocationOutcome.Unavailable(location, resolved.Url);
 
             if (fetch.IsError)
-                return new LocationOutcome(location, resolved.Url, LocationOutcomeStatus.Error, Array.Empty<Solicitor>(), fetch.ErrorMessage);
+                return LocationOutcome.Failed(location, resolved.Url, fetch.ErrorMessage!);
 
             var solicitors = _parser.Parse(fetch.Html!, location);
-            var status = solicitors.Count == 0 ? LocationOutcomeStatus.Empty : LocationOutcomeStatus.Success;
-            return new LocationOutcome(location, resolved.Url, status, solicitors, null);
+            return LocationOutcome.Succeeded(location, resolved.Url, solicitors);
         }
         catch (Exception ex)
         {
             var resolved = _resolver.Resolve(location);
-            return new LocationOutcome(location, resolved.Url, LocationOutcomeStatus.Error, Array.Empty<Solicitor>(), ex.Message);
+            return LocationOutcome.Failed(location, resolved.Url, ex.Message);
         }
         finally
         {

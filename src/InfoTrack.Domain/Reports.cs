@@ -5,7 +5,6 @@ public record SearchReport(
     IReadOnlyList<LocationSummary> LocationSummaries,
     IReadOnlyList<FirmRanking> TopFirmsByReviewCount,
     IReadOnlyList<MultiLocationFirm> MultiLocationFirms,
-    IReadOnlyList<CoverageGap> CoverageGaps,
     Contactability Contactability);
 
 public record RunSummary(
@@ -32,10 +31,6 @@ public record MultiLocationFirm(
     string NormalisedFirmName,
     IReadOnlyList<string> Locations,
     int LocationCount);
-
-public record CoverageGap(
-    string Location,
-    int SolicitorCount);
 
 public record Contactability(
     int TotalFirms,

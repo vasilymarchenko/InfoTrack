@@ -31,7 +31,7 @@ public static class SearchEndpoints
         ISolicitorSearchService searchService,
         CancellationToken ct)
     {
-        if (request.Locations == null || request.Locations.Count == 0)
+        if (request.Locations.Count == 0)
             return Results.ValidationProblem(
                 new Dictionary<string, string[]>
                 {
