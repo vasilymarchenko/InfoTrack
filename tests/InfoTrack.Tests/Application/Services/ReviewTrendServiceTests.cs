@@ -79,5 +79,7 @@ public class ReviewTrendServiceTests
         public Task<IReadOnlyList<InfoTrack.Application.DTOs.LocationRunSightings>> GetRecentLocationSightingsAsync(string location, DateTimeOffset upToInclusive, int count, CancellationToken ct) => throw new NotImplementedException();
         public Task<IReadOnlyList<InfoTrack.Application.DTOs.LocationFirmLastSeen>> GetLocationFirmLastSeenAsync(string location, CancellationToken ct) => throw new NotImplementedException();
         public Task<IReadOnlyList<string>> GetLocationsWithSuccessfulRunsAsync(CancellationToken ct) => throw new NotImplementedException();
+        public Task<IReadOnlyDictionary<string, IReadOnlyList<InfoTrack.Application.DTOs.LocationRunSightings>>> GetRecentSightingsPerLocationAsync(DateTimeOffset upTo, int count, CancellationToken ct) => throw new NotImplementedException();
+        public Task<IReadOnlyDictionary<string, IReadOnlyList<InfoTrack.Application.DTOs.LocationFirmLastSeen>>> GetAllFirmLastSeenPerLocationAsync(CancellationToken ct) => throw new NotImplementedException();
     }
 }

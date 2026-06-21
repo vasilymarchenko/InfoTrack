@@ -163,5 +163,27 @@ public class CurrentFirmsProjectorTests
         }
 
         public Task<IReadOnlyList<ReviewPoint>> GetFirmReviewHistoryAsync(Guid firmId, CancellationToken ct) => throw new NotImplementedException();
+
+        public Task<IReadOnlyDictionary<string, IReadOnlyList<LocationRunSightings>>> GetRecentSightingsPerLocationAsync(
+            DateTimeOffset upTo, int count, CancellationToken ct)
+        {
+            IReadOnlyDictionary<string, IReadOnlyList<LocationRunSightings>> result =
+                sightingsByLocation.ToDictionary(
+                    kv => kv.Key,
+                    kv => (IReadOnlyList<LocationRunSightings>)kv.Value.Take(count).ToList(),
+                    StringComparer.OrdinalIgnoreCase);
+            return Task.FromResult(result);
+        }
+
+        public Task<IReadOnlyDictionary<string, IReadOnlyList<LocationFirmLastSeen>>> GetAllFirmLastSeenPerLocationAsync(
+            CancellationToken ct)
+        {
+            IReadOnlyDictionary<string, IReadOnlyList<LocationFirmLastSeen>> result =
+                lastSeenByLocation.ToDictionary(
+                    kv => kv.Key,
+                    kv => kv.Value,
+                    StringComparer.OrdinalIgnoreCase);
+            return Task.FromResult(result);
+        }
     }
 }

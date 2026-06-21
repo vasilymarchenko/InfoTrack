@@ -184,8 +184,7 @@ public static class SearchEndpoints
         ReviewTrendService trendService,
         CancellationToken ct)
     {
-        var all = await projector.BuildAsync(ct);
-        var firm = all.FirstOrDefault(f => f.FirmId == id);
+        var firm = await projector.BuildForFirmAsync(id, ct);
         if (firm is null)
             return Results.Problem(statusCode: 404, title: "Firm not found.", detail: $"No firm with id {id}.");
 
@@ -195,16 +194,13 @@ public static class SearchEndpoints
 
     private static async Task<IResult> GetFirmHistoryAsync(
         Guid id,
-        CurrentFirmsProjector projector,
         ReviewTrendService trendService,
         CancellationToken ct)
     {
-        // Verify firm exists.
-        var all = await projector.BuildAsync(ct);
-        if (!all.Any(f => f.FirmId == id))
+        var history = await trendService.BuildAsync(id, ct);
+        if (history.Points.Count == 0)
             return Results.Problem(statusCode: 404, title: "Firm not found.", detail: $"No firm with id {id}.");
 
-        var history = await trendService.BuildAsync(id, ct);
         return Results.Ok(history);
     }
 

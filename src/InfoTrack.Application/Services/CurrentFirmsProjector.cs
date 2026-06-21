@@ -20,72 +20,105 @@ public sealed class CurrentFirmsProjector(
     public async Task<IReadOnlyList<CurrentFirm>> BuildAsync(CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        var locations = await sightings.GetLocationsWithSuccessfulRunsAsync(ct);
 
-        // firmId -> accumulator
+        // 2 queries instead of 1 + 2N (one per location).
+        var recentByLocation   = await sightings.GetRecentSightingsPerLocationAsync(now, K, ct);
+        var allFirmsByLocation = await sightings.GetAllFirmLastSeenPerLocationAsync(ct);
+
         var byFirm = new Dictionary<Guid, FirmAccumulator>();
 
-        foreach (var loc in locations)
+        foreach (var (loc, allFirms) in allFirmsByLocation)
         {
-            // Get K recent successful runs to determine Active vs ProvisionallyAbsent vs ConfirmedGone.
-            var recentSets = await sightings.GetRecentLocationSightingsAsync(loc, now, K, ct);
-            var allFirms   = await sightings.GetLocationFirmLastSeenAsync(loc, ct);
-
-            // Firms in the most recent successful run of this location are Active.
-            var activeFirmKeys = recentSets.Count > 0
-                ? recentSets[0].FirmsByKey.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase)
-                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var firmInfo in allFirms)
-            {
-                if (!byFirm.TryGetValue(firmInfo.FirmId, out var acc))
-                {
-                    acc = new FirmAccumulator(firmInfo.FirmId, firmInfo.FirstSeenAt);
-                    byFirm[firmInfo.FirmId] = acc;
-                }
-
-                // Refresh "latest" to the most recently observed version.
-                if (firmInfo.LastSeenAt >= acc.LastSeenAt)
-                {
-                    acc.Latest = firmInfo.Latest;
-                    acc.LastSeenAt = firmInfo.LastSeenAt;
-                }
-
-                if (acc.FirstSeenAt > firmInfo.FirstSeenAt)
-                    acc.FirstSeenAt = firmInfo.FirstSeenAt;
-
-                FirmStatus status;
-                if (activeFirmKeys.Contains(firmInfo.IdentityKey))
-                {
-                    status = FirmStatus.Active;
-                }
-                else
-                {
-                    // Determine if confirmed gone by checking absence across the K-run window.
-                    var absenceConfidence = confirmer.ConfidenceForAbsent(
-                        firmInfo.IdentityKey, recentSets, K);
-                    status = absenceConfidence == ChangeConfidence.Confirmed
-                        ? FirmStatus.ConfirmedGone
-                        : FirmStatus.ProvisionallyAbsent;
-                }
-
-                // Keep the most "alive" state per location.
-                var existing = acc.Locations.FirstOrDefault(l =>
-                    string.Equals(l.Location, loc, StringComparison.OrdinalIgnoreCase));
-
-                if (existing is null)
-                {
-                    acc.Locations.Add(new FirmLocationState(loc, status, firmInfo.LastSeenAt));
-                }
-                else if (status < existing.Status) // Active(0) < ProvisionallyAbsent(1) < ConfirmedGone(2)
-                {
-                    acc.Locations.Remove(existing);
-                    acc.Locations.Add(new FirmLocationState(loc, status, firmInfo.LastSeenAt));
-                }
-            }
+            recentByLocation.TryGetValue(loc, out var recentSets);
+            ProcessLocation(loc, allFirms, recentSets ?? [], byFirm);
         }
 
-        return byFirm.Values.Select(acc =>
+        return BuildResult(byFirm);
+    }
+
+    /// <summary>
+    /// Projects current state for a single firm, scoped to only the locations where
+    /// that firm has been seen. Avoids loading the full projection for a per-firm lookup.
+    /// Returns null when the firm ID is unknown.
+    /// </summary>
+    public async Task<CurrentFirm?> BuildForFirmAsync(Guid firmId, CancellationToken ct)
+    {
+        // GetFirmReviewHistoryAsync already does one query and gives us the firm's locations.
+        var history = await sightings.GetFirmReviewHistoryAsync(firmId, ct);
+        var firmLocations = history.Select(p => p.Location).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (firmLocations.Count == 0)
+            return null;
+
+        var now = DateTimeOffset.UtcNow;
+        var byFirm = new Dictionary<Guid, FirmAccumulator>();
+
+        foreach (var loc in firmLocations)
+        {
+            var recentSets = await sightings.GetRecentLocationSightingsAsync(loc, now, K, ct);
+            var allFirms   = await sightings.GetLocationFirmLastSeenAsync(loc, ct);
+            ProcessLocation(loc, allFirms, recentSets, byFirm);
+        }
+
+        return BuildResult(byFirm).FirstOrDefault(f => f.FirmId == firmId);
+    }
+
+    private void ProcessLocation(
+        string loc,
+        IReadOnlyList<LocationFirmLastSeen> allFirms,
+        IReadOnlyList<LocationRunSightings> recentSets,
+        Dictionary<Guid, FirmAccumulator> byFirm)
+    {
+        var activeFirmKeys = recentSets.Count > 0
+            ? recentSets[0].FirmsByKey.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var firmInfo in allFirms)
+        {
+            if (!byFirm.TryGetValue(firmInfo.FirmId, out var acc))
+            {
+                acc = new FirmAccumulator(firmInfo.FirmId, firmInfo.FirstSeenAt);
+                byFirm[firmInfo.FirmId] = acc;
+            }
+
+            if (firmInfo.LastSeenAt >= acc.LastSeenAt)
+            {
+                acc.Latest = firmInfo.Latest;
+                acc.LastSeenAt = firmInfo.LastSeenAt;
+            }
+
+            if (acc.FirstSeenAt > firmInfo.FirstSeenAt)
+                acc.FirstSeenAt = firmInfo.FirstSeenAt;
+
+            FirmStatus status;
+            if (activeFirmKeys.Contains(firmInfo.IdentityKey))
+            {
+                status = FirmStatus.Active;
+            }
+            else
+            {
+                var absenceConfidence = confirmer.ConfidenceForAbsent(firmInfo.IdentityKey, recentSets, K);
+                status = absenceConfidence == ChangeConfidence.Confirmed
+                    ? FirmStatus.ConfirmedGone
+                    : FirmStatus.ProvisionallyAbsent;
+            }
+
+            var existing = acc.Locations.FirstOrDefault(l =>
+                string.Equals(l.Location, loc, StringComparison.OrdinalIgnoreCase));
+
+            if (existing is null)
+            {
+                acc.Locations.Add(new FirmLocationState(loc, status, firmInfo.LastSeenAt));
+            }
+            else if (status < existing.Status) // Active(0) < ProvisionallyAbsent(1) < ConfirmedGone(2)
+            {
+                acc.Locations.Remove(existing);
+                acc.Locations.Add(new FirmLocationState(loc, status, firmInfo.LastSeenAt));
+            }
+        }
+    }
+
+    private static IReadOnlyList<CurrentFirm> BuildResult(Dictionary<Guid, FirmAccumulator> byFirm) =>
+        byFirm.Values.Select(acc =>
         {
             var rollup = acc.Locations.Count == 0
                 ? FirmStatus.ConfirmedGone
@@ -99,7 +132,6 @@ public sealed class CurrentFirmsProjector(
                 RollupStatus: rollup,
                 Locations: acc.Locations.AsReadOnly());
         }).ToList();
-    }
 
     private sealed class FirmAccumulator(Guid firmId, DateTimeOffset firstSeenAt)
     {

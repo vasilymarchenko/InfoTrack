@@ -84,4 +84,35 @@ Accept: application/json
 
 
 
+### Get per-location changes for a run
+### Uses each location's own most recent earlier successful run as baseline.
+GET {{baseUrl}}/api/searches/{{subjectRunId}}/changes
+Accept: application/json
+
+###
+
+### List current firms projection
+### Optional query examples:
+###   ?status=active
+###   ?status=provisional
+###   ?status=gone
+###   ?addedSince=2026-06-01T00:00:00Z
+GET {{baseUrl}}/api/firms
+Accept: application/json
+
+###
+
+### Get a single firm by id
+@firmId = 273d42f9-5583-4572-844c-2fdc5a595bc6
+GET {{baseUrl}}/api/firms/{{firmId}}
+Accept: application/json
+
+###
+
+### Get a firm's review-count history by id
+GET {{baseUrl}}/api/firms/{{firmId}}/history
+Accept: application/json
+
+###
+
 ###
