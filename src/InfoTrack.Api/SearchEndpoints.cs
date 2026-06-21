@@ -27,7 +27,23 @@ public static class SearchEndpoints
 
         group.MapGet("/searches/{id:guid}/diff", GetDiffAsync)
             .WithName("GetDiff")
-            .WithSummary("Per-location diff between two runs. Omit 'against' to compare against the previous run.");
+            .WithSummary("Per-location diff between two runs (MVP semantics + confidence). Omit 'against' to compare against the previous run.");
+
+        group.MapGet("/searches/{id:guid}/changes", GetChangesAsync)
+            .WithName("GetChanges")
+            .WithSummary("Per-location-baseline change view with confidence. Each location is compared against its own most recent earlier successful run.");
+
+        group.MapGet("/firms", GetFirmsAsync)
+            .WithName("GetFirms")
+            .WithSummary("Current-firms projection. Optional: status=active|provisional|gone, addedSince={date}.");
+
+        group.MapGet("/firms/{id:guid}", GetFirmAsync)
+            .WithName("GetFirm")
+            .WithSummary("A single firm's current state plus review-count history.");
+
+        group.MapGet("/firms/{id:guid}/history", GetFirmHistoryAsync)
+            .WithName("GetFirmHistory")
+            .WithSummary("Review-count history and overall trend for a firm.");
 
         group.MapGet("/locations", GetLocations)
             .WithName("GetLocations")
@@ -109,6 +125,87 @@ public static class SearchEndpoints
         }
 
         return Results.Ok(comparer.Compare(subject, baseline));
+    }
+
+    private static async Task<IResult> GetChangesAsync(
+        Guid id,
+        LocationChangeService changeService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var view = await changeService.BuildDefaultViewAsync(id, ct);
+            return Results.Ok(view);
+        }
+        catch (KeyNotFoundException)
+        {
+            return Results.Problem(statusCode: 404, title: "Run not found.", detail: $"No search run with id {id}.");
+        }
+    }
+
+    private static async Task<IResult> GetFirmsAsync(
+        string? status,
+        DateTimeOffset? addedSince,
+        CurrentFirmsProjector projector,
+        CancellationToken ct)
+    {
+        var all = await projector.BuildAsync(ct);
+
+        IEnumerable<CurrentFirm> result = all;
+
+        if (status is not null)
+        {
+            var parsed = status.ToLowerInvariant() switch
+            {
+                "active"      => (FirmStatus?)FirmStatus.Active,
+                "provisional" => FirmStatus.ProvisionallyAbsent,
+                "gone"        => FirmStatus.ConfirmedGone,
+                _             => null
+            };
+
+            if (parsed is null)
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["status"] = [$"Unknown status '{status}'. Valid values: active, provisional, gone."]
+                });
+
+            result = result.Where(f => f.RollupStatus == parsed.Value);
+        }
+
+        if (addedSince.HasValue)
+            result = result.Where(f => f.FirstSeenAt >= addedSince.Value);
+
+        return Results.Ok(result.ToList());
+    }
+
+    private static async Task<IResult> GetFirmAsync(
+        Guid id,
+        CurrentFirmsProjector projector,
+        ReviewTrendService trendService,
+        CancellationToken ct)
+    {
+        var all = await projector.BuildAsync(ct);
+        var firm = all.FirstOrDefault(f => f.FirmId == id);
+        if (firm is null)
+            return Results.Problem(statusCode: 404, title: "Firm not found.", detail: $"No firm with id {id}.");
+
+        var history = await trendService.BuildAsync(id, ct);
+        return Results.Ok(new { firm, history });
+    }
+
+    private static async Task<IResult> GetFirmHistoryAsync(
+        Guid id,
+        CurrentFirmsProjector projector,
+        ReviewTrendService trendService,
+        CancellationToken ct)
+    {
+        // Verify firm exists.
+        var all = await projector.BuildAsync(ct);
+        if (!all.Any(f => f.FirmId == id))
+            return Results.Problem(statusCode: 404, title: "Firm not found.", detail: $"No firm with id {id}.");
+
+        var history = await trendService.BuildAsync(id, ct);
+        return Results.Ok(history);
     }
 
     private static IResult GetLocations(IOptions<ScraperOptions> options) =>

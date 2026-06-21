@@ -22,7 +22,7 @@ public sealed record RunListItem(
     int LocationCount,
     int TotalUniqueFirms);
 
-public enum ComparabilityStatus { Comparable, NotRequested, ScrapeFailed }
+// ComparabilityStatus is defined in ChangeDetection.cs (extended with NoBaseline for FULL).
 
 public sealed record LocationDiff(
     string Location,
