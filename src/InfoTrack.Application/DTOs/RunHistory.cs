@@ -22,16 +22,4 @@ public sealed record RunListItem(
     int LocationCount,
     int TotalUniqueFirms);
 
-// ComparabilityStatus is defined in ChangeDetection.cs (extended with NoBaseline for FULL).
 
-public sealed record LocationDiff(
-    string Location,
-    ComparabilityStatus Comparability,
-    IReadOnlyList<Solicitor> NewFirms,
-    IReadOnlyList<Solicitor> AbsentFirms);
-
-public sealed record RunDiff(
-    Guid SubjectRunId,
-    Guid? BaselineRunId,
-    string? Message,
-    IReadOnlyList<LocationDiff> Locations);

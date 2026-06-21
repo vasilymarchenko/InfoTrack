@@ -111,23 +111,6 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
             .Select(r => new RunListItem(r.Id, r.RunAtUtc, r.AreaOfLaw, r.TotalLocations, r.TotalUniqueFirms))
             .ToListAsync(ct);
 
-    public async Task<Guid?> GetPreviousRunIdAsync(Guid runId, CancellationToken ct)
-    {
-        var runAt = await db.SearchRuns
-            .Where(r => r.Id == runId)
-            .Select(r => (DateTimeOffset?)r.RunAtUtc)
-            .FirstOrDefaultAsync(ct);
-
-        if (runAt is null) return null;
-
-        return await db.SearchRuns
-            .Where(r => r.RunAtUtc < runAt && r.Id != runId)
-            .OrderByDescending(r => r.RunAtUtc)
-            .Select(r => (Guid?)r.Id)
-            .FirstOrDefaultAsync(ct);
-    }
-
-
     private static StoredRun MapToStoredRun(SearchRunEntity run) => new(
         RunId: run.Id,
         RunAtUtc: run.RunAtUtc,

@@ -9,10 +9,7 @@ public enum ComparabilityStatus { Comparable, NotRequested, ScrapeFailed, NoBase
 
 public sealed record ChangedFirm(Solicitor Firm, ChangeConfidence Confidence);
 
-/// <summary>
-/// Per-location change result from the FULL per-location-baseline view. Replaces LocationDiff
-/// for the /changes endpoint; /diff continues to use LocationDiff for backward compatibility.
-/// </summary>
+/// <summary>Per-location change result from the FULL per-location-baseline view.</summary>
 public sealed record LocationChange(
     string Location,
     ComparabilityStatus Comparability,

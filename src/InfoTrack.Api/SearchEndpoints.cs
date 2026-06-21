@@ -25,10 +25,6 @@ public static class SearchEndpoints
             .WithName("GetRun")
             .WithSummary("Re-open a stored run with its recomputed report.");
 
-        group.MapGet("/searches/{id:guid}/diff", GetDiffAsync)
-            .WithName("GetDiff")
-            .WithSummary("Per-location diff between two runs (MVP semantics + confidence). Omit 'against' to compare against the previous run.");
-
         group.MapGet("/searches/{id:guid}/changes", GetChangesAsync)
             .WithName("GetChanges")
             .WithSummary("Per-location-baseline change view with confidence. Each location is compared against its own most recent earlier successful run.");
@@ -93,38 +89,6 @@ public static class SearchEndpoints
         var result = ToSearchResult(stored);
         var report = reportBuilder.Build(result);
         return Results.Ok(new SearchResponse(result, report, stored.RunId));
-    }
-
-    private static async Task<IResult> GetDiffAsync(
-        Guid id,
-        Guid? against,
-        ISearchRunRepository repository,
-        RunComparer comparer,
-        CancellationToken ct)
-    {
-        var subject = await repository.GetAsync(id, ct);
-        if (subject is null)
-            return Results.Problem(statusCode: 404, title: "Run not found.", detail: $"No search run with id {id}.");
-
-        StoredRun baseline;
-
-        if (against.HasValue)
-        {
-            var explicitBaseline = await repository.GetAsync(against.Value, ct);
-            if (explicitBaseline is null)
-                return Results.Problem(statusCode: 404, title: "Baseline run not found.", detail: $"No search run with id {against.Value}.");
-            baseline = explicitBaseline;
-        }
-        else
-        {
-            var previousId = await repository.GetPreviousRunIdAsync(id, ct);
-            if (previousId is null)
-                return Results.Ok(new RunDiff(id, null, "No earlier run to compare against.", []));
-
-            baseline = (await repository.GetAsync(previousId.Value, ct))!;
-        }
-
-        return Results.Ok(comparer.Compare(subject, baseline));
     }
 
     private static async Task<IResult> GetChangesAsync(
