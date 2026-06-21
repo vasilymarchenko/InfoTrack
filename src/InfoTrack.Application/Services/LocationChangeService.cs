@@ -15,7 +15,6 @@ namespace InfoTrack.Application.Services;
 public sealed class LocationChangeService(
     ISearchRunRepository repository,
     ISightingRepository sightings,
-    RunComparer mvpComparer,
     ChangeConfirmer confirmer,
     IOptions<ChangeDetectionOptions> opts)
 {
@@ -76,56 +75,4 @@ public sealed class LocationChangeService(
         return new ChangeView(subjectRunId, subject.RunAtUtc, locations);
     }
 
-    /// <summary>
-    /// Explicit two-run diff with confidence: compares the two named runs using MVP semantics
-    /// but enriches each new/absent firm with confidence from the confirmer.
-    /// </summary>
-    public async Task<ChangeView> BuildExplicitDiffViewAsync(
-        Guid subjectRunId, Guid baselineRunId, CancellationToken ct)
-    {
-        var subject = await repository.GetAsync(subjectRunId, ct);
-        if (subject is null)
-            throw new KeyNotFoundException($"Subject run {subjectRunId} not found.");
-
-        var baseline = await repository.GetAsync(baselineRunId, ct);
-        if (baseline is null)
-            throw new KeyNotFoundException($"Baseline run {baselineRunId} not found.");
-
-        // Use the MVP comparer to get the raw per-location diff.
-        var mvpDiff = mvpComparer.Compare(subject, baseline);
-
-        var locations = new List<LocationChange>();
-
-        foreach (var ld in mvpDiff.Locations)
-        {
-            if (ld.Comparability != ComparabilityStatus.Comparable)
-            {
-                locations.Add(new LocationChange(ld.Location, ld.Comparability, baselineRunId, [], []));
-                continue;
-            }
-
-            // Fetch K+1 recent successful sightings around the subject run for confidence.
-            var recentSets = await sightings.GetRecentLocationSightingsAsync(
-                ld.Location, subject.RunAtUtc, K + 1, ct);
-
-            var newFirms = ld.NewFirms
-                .Select(f => new ChangedFirm(f, confirmer.ConfidenceForNew(
-                    FirmIdentity.BranchKey(f), recentSets, K)))
-                .ToList();
-
-            var absentFirms = ld.AbsentFirms
-                .Select(f => new ChangedFirm(f, confirmer.ConfidenceForAbsent(
-                    FirmIdentity.BranchKey(f), recentSets, K)))
-                .ToList();
-
-            locations.Add(new LocationChange(
-                ld.Location,
-                ComparabilityStatus.Comparable,
-                baselineRunId,
-                newFirms,
-                absentFirms));
-        }
-
-        return new ChangeView(subjectRunId, subject.RunAtUtc, locations);
-    }
 }
