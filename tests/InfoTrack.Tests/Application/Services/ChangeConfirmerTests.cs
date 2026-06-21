@@ -93,6 +93,30 @@ public class ChangeConfirmerTests
         Assert.Equal(ChangeConfidence.Confirmed, result);
     }
 
+    [Fact]
+    public void ForAbsent_FirstMissOnly_IsProvisional_WhenK2()
+    {
+        // recentSets[0]=subject (absent), recentSets[1]=baseline (present).
+        // This is the canonical calling convention from LocationChangeService on the very first miss.
+        // K=2 requires two consecutive misses — should remain Provisional.
+        var sets = new[] { MakeSet("A"), MakeSet("A", "Gone") };
+
+        var result = Sut.ConfidenceForAbsent("Gone", sets, 2);
+
+        Assert.Equal(ChangeConfidence.Provisional, result);
+    }
+
+    [Fact]
+    public void ForAbsent_TwoConsecutiveMisses_IsConfirmed_WhenK2()
+    {
+        // [0]=subject (absent), [1]=prior run (absent), [2]=last sighting — 2 consecutive misses.
+        var sets = new[] { MakeSet("A"), MakeSet("A"), MakeSet("A", "Gone") };
+
+        var result = Sut.ConfidenceForAbsent("Gone", sets, 2);
+
+        Assert.Equal(ChangeConfidence.Confirmed, result);
+    }
+
     // --- ConfidenceForNew ---
 
     [Fact]

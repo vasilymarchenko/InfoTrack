@@ -53,14 +53,25 @@ public sealed class LocationChangeService(
             var subjectSet  = recentSets[0];
             var baselineSet = recentSets[1];
 
-            var newKeys    = subjectSet.FirmsByKey.Keys.Except(baselineSet.FirmsByKey.Keys, StringComparer.OrdinalIgnoreCase).ToList();
-            var absentKeys = baselineSet.FirmsByKey.Keys.Except(subjectSet.FirmsByKey.Keys, StringComparer.OrdinalIgnoreCase).ToList();
+            var newKeys = subjectSet.FirmsByKey.Keys.Except(baselineSet.FirmsByKey.Keys, StringComparer.OrdinalIgnoreCase).ToList();
+            // Absent candidates: any firm seen in the K prior runs (recentSets[1..K])
+            // but missing from the subject. 
+            var absentKeys = recentSets
+                .Skip(1)
+                .SelectMany(s => s.FirmsByKey.Keys)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(k => !subjectSet.FirmsByKey.ContainsKey(k))
+                .ToList();
 
             var newFirms = newKeys
                 .Select(k => new ChangedFirm(subjectSet.FirmsByKey[k], confirmer.ConfidenceForNew(k, recentSets, K)))
                 .ToList();
             var absentFirms = absentKeys
-                .Select(k => new ChangedFirm(baselineSet.FirmsByKey[k], confirmer.ConfidenceForAbsent(k, recentSets, K)))
+                .Select(k =>
+                {
+                    var lastKnown = recentSets.Skip(1).First(s => s.FirmsByKey.ContainsKey(k)).FirmsByKey[k];
+                    return new ChangedFirm(lastKnown, confirmer.ConfidenceForAbsent(k, recentSets, K));
+                })
                 .ToList();
 
             locations.Add(new LocationChange(

@@ -10,25 +10,22 @@ public sealed class ChangeConfirmer
 {
     /// <summary>
     /// Confidence for a firm that is absent from the subject run.
-    /// Confirmed requires the firm to be missing from ALL K most recent successful runs
-    /// (the "gone window" = recentSets[0..K-1], where recentSets[0] is the subject run).
-    /// Any reappearance in the window → Provisional (flicker never confirms a disappearance).
+    /// Walks <paramref name="recentSets"/> from the subject (index 0) outward until the firm is
+    /// found; that index equals the number of consecutive misses. K or more consecutive misses
+    /// → Confirmed. Fewer → Provisional.
     /// </summary>
     public ChangeConfidence ConfidenceForAbsent(
         string identityKey,
         IReadOnlyList<LocationRunSightings> recentSets,
         int k)
     {
-        // Not enough distance yet.
-        if (recentSets.Count < k)
-            return ChangeConfidence.Provisional;
-
-        // "gone window" = the K most recent successful runs including the subject run.
-        for (var i = 0; i < k; i++)
+        for (var i = 0; i < recentSets.Count; i++)
+        {
             if (recentSets[i].FirmsByKey.ContainsKey(identityKey))
-                return ChangeConfidence.Provisional;
-
-        return ChangeConfidence.Confirmed;
+                return i >= k ? ChangeConfidence.Confirmed : ChangeConfidence.Provisional;
+        }
+        // Absent from the entire provided window — at least recentSets.Count consecutive misses.
+        return recentSets.Count >= k ? ChangeConfidence.Confirmed : ChangeConfidence.Provisional;
     }
 
     /// <summary>
