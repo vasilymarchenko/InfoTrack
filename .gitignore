@@ -1,3 +1,6 @@
+## Corporate CA certs (machine-local, do not commit — see certs/.gitkeep)
+certs/*.crt
+
 ## Build
 [Bb]in/
 [Oo]bj/

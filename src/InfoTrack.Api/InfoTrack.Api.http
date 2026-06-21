@@ -8,9 +8,13 @@ GET {{baseUrl}}/health
 
 ###
 
-### Get supported locations
-GET {{baseUrl}}/api/locations
-Accept: application/json
+### Interactive API docs (Scalar)
+GET {{baseUrl}}/scalar/v1
+
+###
+
+### OpenAPI document
+GET {{baseUrl}}/openapi/v1.json
 
 ###
 
@@ -41,5 +45,43 @@ Content-Type: application/json
 {
   "locations": ["London", "Nowhere", "Leeds"]
 }
+
+###
+
+### Get supported locations
+GET {{baseUrl}}/api/locations
+Accept: application/json
+
+###
+
+### List stored runs (newest first)
+GET {{baseUrl}}/api/searches
+Accept: application/json
+
+###
+
+### Get a stored run by id
+### 1) Run one of the POST /api/searches requests below
+### 2) Copy response.runId into @runId
+@runId = 947bfde6-008d-4a0b-9642-5ff3266cf372
+GET {{baseUrl}}/api/searches/{{runId}}
+Accept: application/json
+
+###
+
+### Diff run vs explicit baseline
+### Set both ids from previous POST responses or GET /api/searches output
+@subjectRunId = 45cd0e9c-a7e2-4f62-a28d-42c0d2b4d5d1
+@baselineRunId = 9a90d2a1-7e55-4f01-a2c1-c5d60f63a614
+GET {{baseUrl}}/api/searches/{{subjectRunId}}/diff?against={{baselineRunId}}
+Accept: application/json
+
+###
+
+### Diff run vs most recent earlier run (omit against)
+GET {{baseUrl}}/api/searches/{{subjectRunId}}/diff
+Accept: application/json
+
+
 
 ###

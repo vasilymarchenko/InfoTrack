@@ -120,13 +120,10 @@ Request body:
 
 ```json
 {
-  "locations": ["London", "Birmingham", "Leeds"],
-  "areaOfLaw": "Conveyancing"
+  "locations": ["London", "Birmingham", "Leeds"]
 }
 ```
 
-- `locations` — required, at least one city name
-- `areaOfLaw` — optional, defaults to `"Conveyancing"` (only area currently supported)
 
 Response shape:
 
