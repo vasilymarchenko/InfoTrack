@@ -1,6 +1,6 @@
 # InfoTrack Solicitor Intelligence Tool
 
-A .NET API that scrapes conveyancing solicitor listings from [solicitors.com](https://www.solicitors.com), de-duplicates firms across locations, and returns a structured report with sales insights (top firms by review count, multi-location chains, coverage gaps, contactability). Search runs are persisted to Postgres; subsequent calls can retrieve stored results and compare runs to detect firm changes.
+A .NET API that scrapes conveyancing solicitor listings from [solicitors.com](https://www.solicitors.com), de-duplicates firms across locations, and returns a structured report with sales insights (top firms by review count, multi-location chains, coverage gaps, contactability). Search runs are persisted to Postgres; subsequent calls can retrieve stored results, compare runs with confidence-rated change detection, or query the current state of every known firm.
 
 ## Prerequisites
 
@@ -66,7 +66,7 @@ dotnet build InfoTrack.slnx
 dotnet test tests/InfoTrack.Tests/InfoTrack.Tests.csproj
 ```
 
-Parser tests load embedded HTML fixtures from `tests/InfoTrack.Tests/Fixtures/` and do not call the live site. `RunComparer` tests are pure (no database required).
+Parser tests load embedded HTML fixtures from `tests/InfoTrack.Tests/Fixtures/` and do not call the live site. Change-detection and projection service tests are pure (no database required).
 
 ### Run the API
 
@@ -107,120 +107,30 @@ More request examples are in `src/InfoTrack.Api/InfoTrack.Api.http`.
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| `GET` | `/health` | Returns `200` with `{ "status": "healthy" }` |
+| `GET` | `/health` | Liveness check |
 | `GET` | `/api/locations` | Default location list from configuration |
-| `POST` | `/api/searches` | Scrape one or more locations; persists the run and returns results, report, and `runId` |
+| `POST` | `/api/searches` | Scrape locations; returns results, report, and `runId` |
 | `GET` | `/api/searches` | List all past runs, newest first |
 | `GET` | `/api/searches/{id}` | Re-open a stored run with its recomputed report |
-| `GET` | `/api/searches/{id}/diff` | Per-location diff vs a previous run |
+| `GET` | `/api/searches/{id}/changes` | Per-location change view with `Provisional`/`Confirmed` confidence |
+| `GET` | `/api/firms` | Current-firms projection; filter by `status` or `addedSince` |
+| `GET` | `/api/firms/{id}` | Single firm's current state and review-count history |
+| `GET` | `/api/firms/{id}/history` | Review-count history and overall trend for a firm |
 
-### `POST /api/searches`
-
-Request body:
-
-```json
-{
-  "locations": ["London", "Birmingham", "Leeds"]
-}
-```
-
-
-Response shape:
-
-```json
-{
-  "runId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "result": {
-    "runAtUtc": "2026-06-17T12:00:00+00:00",
-    "areaOfLaw": "Conveyancing",
-    "locationOutcomes": [ "..." ],
-    "uniqueSolicitors": [ "..." ]
-  },
-  "report": {
-    "summary": { "..." },
-    "locationSummaries": [ "..." ],
-    "topFirmsByReviewCount": [ "..." ],
-    "multiLocationFirms": [ "..." ],
-    "contactability": { "..." }
-  }
-}
-```
-
-Each location is fetched independently. A single location failing (404, timeout, parse error) does not abort the whole run — its status is reported in `locationOutcomes` as `Success`, `Empty`, `Unavailable`, or `Error`.
-
-Persistence failures return `500 ProblemDetails` — the response body is not returned when the save did not complete.
-
-### `GET /api/searches`
-
-Returns an array of run summaries, newest first:
-
-```json
-[
-  {
-    "runId": "3fa85f64-...",
-    "runAtUtc": "2026-06-17T12:00:00+00:00",
-    "areaOfLaw": "Conveyancing",
-    "locationCount": 3,
-    "totalUniqueFirms": 42
-  }
-]
-```
-
-### `GET /api/searches/{id}`
-
-Re-reads a stored run and recomputes the report on the fly. Returns the same shape as `POST /api/searches`. Returns `404 ProblemDetails` if the run does not exist.
-
-### `GET /api/searches/{id}/diff?against={guid}`
-
-Compares the run `{id}` (subject) against a baseline run.
-
-- If `against` is omitted, the baseline is automatically the most recent run with a timestamp strictly earlier than the subject.
-- If no earlier run exists, returns `200` with an explanatory message and an empty locations list.
-- Returns `404 ProblemDetails` if either run is not found.
-
-Response shape:
-
-```json
-{
-  "subjectRunId": "3fa85f64-...",
-  "baselineRunId": "1a2b3c4d-...",
-  "message": null,
-  "locations": [
-    {
-      "location": "London",
-      "comparability": "Comparable",
-      "newFirms": [ "..." ],
-      "absentFirms": [ "..." ]
-    },
-    {
-      "location": "Leeds",
-      "comparability": "ScrapeFailed",
-      "newFirms": [],
-      "absentFirms": []
-    }
-  ]
-}
-```
-
-`comparability` values:
-
-| Value | Meaning |
-|-------|---------|
-| `Comparable` | Both runs scraped this location successfully — `newFirms`/`absentFirms` are meaningful |
-| `ScrapeFailed` | At least one run returned `Empty`, `Unavailable`, or `Error` for this location — no change claim is made |
-| `NotRequested` | Location only appears in one of the two runs — no comparison is possible |
+Full request/response shapes, comparability values, confidence semantics, and shared types are in [docs/API-reference.md](docs/API-reference.md).
 
 ## Configuration
 
-Settings are in `src/InfoTrack.Api/appsettings.json` under the `Scraper` section. Override any value with environment variables using the `__` separator (ASP.NET Core convention).
+Settings are in `src/InfoTrack.Api/appsettings.json`. Override any value with environment variables using the `__` separator (ASP.NET Core convention).
 
 | Key | Purpose | Default |
-|-----|---------|---------|
+|-----|---------|----------|
 | `Scraper:BaseUrl` | solicitors.com base URL | `https://www.solicitors.com` |
-| `Scraper:UserAgent` | HTTP User-Agent on scrape requests | `InfoTrackBot/1.0` |
+| `Scraper:UserAgent` | HTTP User-Agent on scrape requests | `Mozilla/5.0 (compatible; InfoTrackBot/1.0; ...)` |
 | `Scraper:TimeoutSeconds` | Per-request timeout | `15` |
-| `Scraper:MaxParallelism` | Concurrent location fetches | `4` |
+| `Search:MaxParallelism` | Concurrent location fetches | `4` |
 | `Scraper:DefaultLocations` | Cities returned by `GET /api/locations` | 8 UK cities (see `appsettings.json`) |
+| `ChangeDetection:ConfirmationWindow` | Consecutive successful runs required to confirm a change | `3` |
 | `ConnectionStrings:Postgres` | Postgres connection string | _(not set — required)_ |
 
 The connection string key is `ConnectionStrings:Postgres`. When running via Docker Compose the value is injected as the environment variable `ConnectionStrings__Postgres` (double-underscore notation). To override locally:
@@ -266,9 +176,13 @@ EF Core and Npgsql are confined to `Infrastructure`. `Domain` and `Application` 
 
 ### Change-detection contract
 
-A change claim (`newFirms` / `absentFirms`) is made **only** when a location returned `Success` in **both** runs being compared. Any other combination is labelled `ScrapeFailed` or `NotRequested` with empty firm lists. This prevents a single scrape failure from appearing as a mass disappearance of firms.
+`GET /api/searches/{id}/changes` compares each location against the most recent earlier successful run **for that specific location**, so each city always uses its own nearest baseline rather than a shared global run.
 
-Absence is recorded as "not seen in this run" — there is no boolean `deleted` or `active` flag on a firm. A firm that disappears and later reappears is simply new again in the run where it returns; no confirmation or debounce is applied (deferred to Phase 2 Full).
+The target site rotates which firms it surfaces per scrape, so a single absence is not treated as a confirmed departure. Each reported change carries a `Provisional` or `Confirmed` confidence. **Confirmed** requires the change to hold across `K` consecutive successful runs (`ChangeDetection:ConfirmationWindow`, default `3`); **Provisional** means the change was observed but not yet sustained across the full window. A reappearance at any point in the window resets the counter.
+
+A change claim is only made when the subject run's scrape returned `Success` for that location. Any other outcome is labelled `ScrapeFailed` with empty firm lists, preventing a scrape failure from appearing as a mass disappearance.
+
+Absence is recorded as "not seen in this run" — there is no `deleted` flag on a firm.
 
 ### Latest-attributes trade-off
 

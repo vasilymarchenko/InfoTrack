@@ -18,6 +18,9 @@ builder.Services.Configure<ScraperOptions>(
 builder.Services.Configure<SearchServiceOptions>(
     builder.Configuration.GetSection(SearchServiceOptions.SectionName));
 
+builder.Services.Configure<ChangeDetectionOptions>(
+    builder.Configuration.GetSection(ChangeDetectionOptions.SectionName));
+
 builder.Services.AddOpenApi();
 
 builder.Services.AddProblemDetails();
@@ -39,7 +42,11 @@ builder.Services.AddSingleton<IReportBuilder, ReportBuilder>();
 var cs = builder.Configuration.GetConnectionString("Postgres");
 builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(cs));
 builder.Services.AddScoped<ISearchRunRepository, EfSearchRunRepository>();
-builder.Services.AddSingleton<RunComparer>();
+builder.Services.AddScoped<ISightingRepository, EfSightingRepository>();
+builder.Services.AddSingleton<ChangeConfirmer>();
+builder.Services.AddScoped<LocationChangeService>();
+builder.Services.AddScoped<CurrentFirmsProjector>();
+builder.Services.AddScoped<ReviewTrendService>();
 
 // Scoped so it captures the scoped IListingFetcher (typed HttpClient) safely.
 builder.Services.AddScoped<ISolicitorSearchService, SolicitorSearchService>();

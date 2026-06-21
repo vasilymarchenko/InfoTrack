@@ -23,7 +23,6 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
         Dictionary<string, Solicitor> foundByKey = result.UniqueSolicitors
             .ToDictionary(FirmIdentity.BranchKey, StringComparer.OrdinalIgnoreCase);
 
-        // This is needed to build sightings — which firms appeared in which location
         Dictionary<string, Dictionary<string, Solicitor>> foundByLocation = result.LocationOutcomes
             .Where(o => o.Status == LocationOutcomeStatus.Success)
             .ToDictionary(
@@ -111,23 +110,6 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
             .Select(r => new RunListItem(r.Id, r.RunAtUtc, r.AreaOfLaw, r.TotalLocations, r.TotalUniqueFirms))
             .ToListAsync(ct);
 
-    public async Task<Guid?> GetPreviousRunIdAsync(Guid runId, CancellationToken ct)
-    {
-        var runAt = await db.SearchRuns
-            .Where(r => r.Id == runId)
-            .Select(r => (DateTimeOffset?)r.RunAtUtc)
-            .FirstOrDefaultAsync(ct);
-
-        if (runAt is null) return null;
-
-        return await db.SearchRuns
-            .Where(r => r.RunAtUtc < runAt && r.Id != runId)
-            .OrderByDescending(r => r.RunAtUtc)
-            .Select(r => (Guid?)r.Id)
-            .FirstOrDefaultAsync(ct);
-    }
-
-
     private static StoredRun MapToStoredRun(SearchRunEntity run) => new(
         RunId: run.Id,
         RunAtUtc: run.RunAtUtc,
@@ -139,24 +121,7 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
         RequestedUrl: l.RequestedUrl,
         Status: l.Status,
         ErrorMessage: l.ErrorMessage,
-        Firms: l.Sightings.Select(s => MapToSolicitor(s, l.Location, runAtUtc)).ToList());
-
-    private static Solicitor MapToSolicitor(SightingEntity s, string location, DateTimeOffset scrapedAt) => new(
-        FirmName: s.Firm.FirmName,
-        SearchedLocation: location,
-        Address: s.Firm.Address,
-        Town: s.Firm.Town,
-        Postcode: s.Firm.Postcode,
-        Phone: s.Firm.Phone,
-        WebsiteUrl: s.Firm.WebsiteUrl,
-        EnquiryUrl: s.Firm.EnquiryUrl,
-        ProfileUrl: s.Firm.ProfileUrl,
-        ReviewCount: s.ReviewCount,
-        Description: s.Firm.Description,
-        LogoUrl: s.Firm.LogoUrl,
-        Tier: ListingTier.Featured,   // Tier is not persisted; default to Featured on read-back
-        ScrapedAtUtc: scrapedAt);
-
+        Firms: l.Sightings.Select(s => FirmMapper.ToSolicitor(s, l.Location, runAtUtc)).ToList());
 
     private static FirmEntity NewFirmEntity(Solicitor s, string key, DateTimeOffset now) => new()
     {

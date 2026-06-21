@@ -63,25 +63,41 @@ Accept: application/json
 ### Get a stored run by id
 ### 1) Run one of the POST /api/searches requests below
 ### 2) Copy response.runId into @runId
-@runId = 947bfde6-008d-4a0b-9642-5ff3266cf372
+@runId = dcb96f8a-575c-43d9-aec9-184350fff7a1
 GET {{baseUrl}}/api/searches/{{runId}}
 Accept: application/json
 
 ###
 
-### Diff run vs explicit baseline
-### Set both ids from previous POST responses or GET /api/searches output
-@subjectRunId = 45cd0e9c-a7e2-4f62-a28d-42c0d2b4d5d1
-@baselineRunId = 9a90d2a1-7e55-4f01-a2c1-c5d60f63a614
-GET {{baseUrl}}/api/searches/{{subjectRunId}}/diff?against={{baselineRunId}}
+### Get per-location changes for a run (per-location baseline, confidence-tagged)
+### Uses each location's own most recent earlier successful run as baseline.
+GET {{baseUrl}}/api/searches/{{runId}}/changes
 Accept: application/json
 
 ###
 
-### Diff run vs most recent earlier run (omit against)
-GET {{baseUrl}}/api/searches/{{subjectRunId}}/diff
+### List current firms projection
+### Optional query examples:
+###   ?status=active
+###   ?status=provisional
+###   ?status=gone
+###   ?addedSince=2026-06-01T00:00:00Z
+GET {{baseUrl}}/api/firms
 Accept: application/json
 
+###
 
+### Get a single firm by id
+@firmId = 06043aee-71e6-4ccc-8ac6-61c447ceac77
+GET {{baseUrl}}/api/firms/{{firmId}}
+Accept: application/json
+
+###
+
+### Get a firm's review-count history by id
+GET {{baseUrl}}/api/firms/{{firmId}}/history
+Accept: application/json
+
+###
 
 ###
