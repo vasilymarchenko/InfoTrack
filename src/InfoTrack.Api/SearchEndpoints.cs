@@ -171,8 +171,6 @@ public static class SearchEndpoints
     private static IResult GetLocations(IOptions<ScraperOptions> options) =>
         Results.Ok(options.Value.DefaultLocations);
 
-    // Reconstructs a SearchResult from a stored run so the Phase 1 ReportBuilder can be reused.
-    // Firms list is recomputed via de-dup to match Phase 1 behaviour.
     private static SearchResult ToSearchResult(StoredRun run)
     {
         var outcomes = run.Locations.Select(l => new LocationOutcome(

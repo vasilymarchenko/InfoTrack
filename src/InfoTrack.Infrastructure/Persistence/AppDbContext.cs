@@ -26,7 +26,6 @@ internal sealed class SearchRunConfiguration : IEntityTypeConfiguration<SearchRu
         builder.HasKey(r => r.Id);
         builder.HasIndex(r => r.RunAtUtc);
 
-        // Stored as JSON text so the same schema works for both Postgres (runtime) and SQLite (tests).
         var jsonConverter = new ValueConverter<List<string>, string>(
             v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
             v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>());

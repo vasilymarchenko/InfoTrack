@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace InfoTrack.Infrastructure.Persistence;
 
-public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepository, ISightingRepository
+public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepository
 {
     public async Task<Guid> SaveAsync(SearchResult result, CancellationToken ct)
     {
@@ -23,7 +23,6 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
         Dictionary<string, Solicitor> foundByKey = result.UniqueSolicitors
             .ToDictionary(FirmIdentity.BranchKey, StringComparer.OrdinalIgnoreCase);
 
-        // This is needed to build sightings — which firms appeared in which location
         Dictionary<string, Dictionary<string, Solicitor>> foundByLocation = result.LocationOutcomes
             .Where(o => o.Status == LocationOutcomeStatus.Success)
             .ToDictionary(
@@ -122,24 +121,7 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
         RequestedUrl: l.RequestedUrl,
         Status: l.Status,
         ErrorMessage: l.ErrorMessage,
-        Firms: l.Sightings.Select(s => MapToSolicitor(s, l.Location, runAtUtc)).ToList());
-
-    private static Solicitor MapToSolicitor(SightingEntity s, string location, DateTimeOffset scrapedAt) => new(
-        FirmName: s.Firm.FirmName,
-        SearchedLocation: location,
-        Address: s.Firm.Address,
-        Town: s.Firm.Town,
-        Postcode: s.Firm.Postcode,
-        Phone: s.Firm.Phone,
-        WebsiteUrl: s.Firm.WebsiteUrl,
-        EnquiryUrl: s.Firm.EnquiryUrl,
-        ProfileUrl: s.Firm.ProfileUrl,
-        ReviewCount: s.ReviewCount,
-        Description: s.Firm.Description,
-        LogoUrl: s.Firm.LogoUrl,
-        Tier: ListingTier.Featured,   // Tier is not persisted; default to Featured on read-back
-        ScrapedAtUtc: scrapedAt);
-
+        Firms: l.Sightings.Select(s => FirmMapper.ToSolicitor(s, l.Location, runAtUtc)).ToList());
 
     private static FirmEntity NewFirmEntity(Solicitor s, string key, DateTimeOffset now) => new()
     {
@@ -172,231 +154,4 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
         firm.Description = s.Description;
         firm.LogoUrl = s.LogoUrl;
     }
-
-    // --- Phase 2 FULL: per-location confirmation window queries ---
-
-    public async Task<IReadOnlyList<LocationRunSightings>> GetRecentLocationSightingsAsync(
-        string location, DateTimeOffset upToInclusive, int count, CancellationToken ct)
-    {
-        // Step 1: find the eligible LocationOutcome IDs using explicit joins to avoid
-        // DateTimeOffset navigation-property translation issues with SQLite.
-        var eligibleIds = await (
-            from run in db.SearchRuns
-            join lo in db.LocationOutcomes on run.Id equals lo.SearchRunId
-            where lo.Location == location
-               && lo.Status == LocationOutcomeStatus.Success
-               && run.RunAtUtc <= upToInclusive
-            orderby run.RunAtUtc descending, lo.SearchRunId descending
-            select lo.Id
-        ).Take(count).ToListAsync(ct);
-
-        if (eligibleIds.Count == 0)
-            return [];
-
-        // Step 2: load the full outcomes with run + sightings + firms.
-        var outcomes = await db.LocationOutcomes
-            .Where(lo => eligibleIds.Contains(lo.Id))
-            .Include(lo => lo.SearchRun)
-            .Include(lo => lo.Sightings)
-                .ThenInclude(s => s.Firm)
-            .ToListAsync(ct);
-
-        // Restore the original ordering (newest first) from step 1.
-        return eligibleIds
-            .Select(id => outcomes.First(o => o.Id == id))
-            .Select(lo => new LocationRunSightings(
-                RunId: lo.SearchRunId,
-                RunAtUtc: lo.SearchRun.RunAtUtc,
-                FirmsByKey: lo.Sightings.ToDictionary(
-                    s => s.Firm.IdentityKey,
-                    s => MapToSolicitor(s, location, lo.SearchRun.RunAtUtc),
-                    StringComparer.OrdinalIgnoreCase)))
-            .ToList();
-    }
-
-    public async Task<IReadOnlyList<LocationFirmLastSeen>> GetLocationFirmLastSeenAsync(
-        string location, CancellationToken ct)
-    {
-        // Load all sightings for successful runs of this location via explicit joins.
-        // Group and aggregate in memory to avoid SQLite DateTimeOffset aggregate limitations.
-        var rows = await (
-            from s in db.Sightings
-            join lo in db.LocationOutcomes on s.LocationOutcomeId equals lo.Id
-            join run in db.SearchRuns on lo.SearchRunId equals run.Id
-            join f in db.Firms on s.FirmId equals f.Id
-            where lo.Location == location
-               && lo.Status == LocationOutcomeStatus.Success
-            select new
-            {
-                FirmId = s.FirmId,
-                f.IdentityKey,
-                f.FirmName, f.Address, f.Town, f.Postcode,
-                f.Phone, f.WebsiteUrl, f.EnquiryUrl, f.ProfileUrl,
-                f.Description, f.LogoUrl, f.FirstSeenAt,
-                RunAtUtc = run.RunAtUtc
-            }
-        ).ToListAsync(ct);
-
-        return rows
-            .GroupBy(r => r.FirmId)
-            .Select(g =>
-            {
-                var lastSeenAt  = g.Max(r => r.RunAtUtc);
-                var firstSeenAt = g.Min(r => r.FirstSeenAt);
-                var latest      = g.OrderByDescending(r => r.RunAtUtc).First();
-                return new LocationFirmLastSeen(
-                    IdentityKey: latest.IdentityKey,
-                    FirmId: latest.FirmId,
-                    Latest: new Solicitor(
-                        FirmName: latest.FirmName,
-                        SearchedLocation: location,
-                        Address: latest.Address,
-                        Town: latest.Town,
-                        Postcode: latest.Postcode,
-                        Phone: latest.Phone,
-                        WebsiteUrl: latest.WebsiteUrl,
-                        EnquiryUrl: latest.EnquiryUrl,
-                        ProfileUrl: latest.ProfileUrl,
-                        ReviewCount: null,
-                        Description: latest.Description,
-                        LogoUrl: latest.LogoUrl,
-                        Tier: ListingTier.Featured,
-                        ScrapedAtUtc: lastSeenAt),
-                    LastSeenAt: lastSeenAt,
-                    FirstSeenAt: firstSeenAt);
-            })
-            .ToList();
-    }
-
-    public async Task<IReadOnlyList<string>> GetLocationsWithSuccessfulRunsAsync(CancellationToken ct) =>
-        await db.LocationOutcomes
-            .Where(l => l.Status == LocationOutcomeStatus.Success)
-            .Select(l => l.Location)
-            .Distinct()
-            .OrderBy(l => l)
-            .ToListAsync(ct);
-
-    public async Task<IReadOnlyList<ReviewPoint>> GetFirmReviewHistoryAsync(Guid firmId, CancellationToken ct)
-    {
-        // Load sightings with run info via explicit join; sort in memory to avoid DateTimeOffset ORDER BY issues.
-        var rows = await (
-            from s in db.Sightings
-            join lo in db.LocationOutcomes on s.LocationOutcomeId equals lo.Id
-            join run in db.SearchRuns on lo.SearchRunId equals run.Id
-            where s.FirmId == firmId
-            select new { RunAtUtc = run.RunAtUtc, lo.Location, s.ReviewCount }
-        ).ToListAsync(ct);
-
-        return rows
-            .OrderBy(r => r.RunAtUtc)
-            .Select(r => new ReviewPoint(r.RunAtUtc, r.Location, r.ReviewCount))
-            .ToList();
-    }
-
-    public async Task<IReadOnlyDictionary<string, IReadOnlyList<LocationRunSightings>>> GetRecentSightingsPerLocationAsync(
-        DateTimeOffset upTo, int count, CancellationToken ct)
-    {
-        // Step 1: load all eligible (outcomeId, location, runId, runAtUtc) for successful runs.
-        // "Top K per group" is grouped in memory to stay provider-agnostic (Postgres + SQLite).
-        var allEligible = await (
-            from run in db.SearchRuns
-            join lo in db.LocationOutcomes on run.Id equals lo.SearchRunId
-            where lo.Status == LocationOutcomeStatus.Success && run.RunAtUtc <= upTo
-            orderby run.RunAtUtc descending
-            select new { lo.Id, lo.Location, lo.SearchRunId, run.RunAtUtc }
-        ).ToListAsync(ct);
-
-        var topKByLocation = allEligible
-            .GroupBy(r => r.Location, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Take(count).ToList(),
-                StringComparer.OrdinalIgnoreCase);
-
-        if (topKByLocation.Count == 0)
-            return new Dictionary<string, IReadOnlyList<LocationRunSightings>>(StringComparer.OrdinalIgnoreCase);
-
-        var topKIds = topKByLocation.Values.SelectMany(v => v.Select(r => r.Id)).ToList();
-
-        // Step 2: load all sightings for the selected outcomes in one query.
-        var sightingRows = await db.Sightings
-            .Where(s => topKIds.Contains(s.LocationOutcomeId))
-            .Include(s => s.Firm)
-            .ToListAsync(ct);
-        var sightingsByOutcome = sightingRows.ToLookup(s => s.LocationOutcomeId);
-
-        return topKByLocation.ToDictionary(
-            kv => kv.Key,
-            kv => (IReadOnlyList<LocationRunSightings>)kv.Value
-                .Select(outcome => new LocationRunSightings(
-                    RunId: outcome.SearchRunId,
-                    RunAtUtc: outcome.RunAtUtc,
-                    FirmsByKey: sightingsByOutcome[outcome.Id]
-                        .ToDictionary(
-                            s => s.Firm.IdentityKey,
-                            s => MapToSolicitor(s, kv.Key, outcome.RunAtUtc),
-                            StringComparer.OrdinalIgnoreCase)))
-                .ToList(),
-            StringComparer.OrdinalIgnoreCase);
-    }
-
-    public async Task<IReadOnlyDictionary<string, IReadOnlyList<LocationFirmLastSeen>>> GetAllFirmLastSeenPerLocationAsync(
-        CancellationToken ct)
-    {
-        // One query across all locations; group and aggregate in memory (same pattern as the
-        // per-location method, extended to all locations at once).
-        var rows = await (
-            from s in db.Sightings
-            join lo in db.LocationOutcomes on s.LocationOutcomeId equals lo.Id
-            join run in db.SearchRuns on lo.SearchRunId equals run.Id
-            join f in db.Firms on s.FirmId equals f.Id
-            where lo.Status == LocationOutcomeStatus.Success
-            select new
-            {
-                lo.Location,
-                FirmId = s.FirmId,
-                f.IdentityKey,
-                f.FirmName, f.Address, f.Town, f.Postcode,
-                f.Phone, f.WebsiteUrl, f.EnquiryUrl, f.ProfileUrl,
-                f.Description, f.LogoUrl, f.FirstSeenAt,
-                RunAtUtc = run.RunAtUtc
-            }
-        ).ToListAsync(ct);
-
-        return rows
-            .GroupBy(r => r.Location, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                g => g.Key,
-                g => (IReadOnlyList<LocationFirmLastSeen>)g
-                    .GroupBy(r => r.FirmId)
-                    .Select(fg =>
-                    {
-                        var lastSeenAt  = fg.Max(r => r.RunAtUtc);
-                        var firstSeenAt = fg.Min(r => r.FirstSeenAt);
-                        var latest      = fg.OrderByDescending(r => r.RunAtUtc).First();
-                        return new LocationFirmLastSeen(
-                            IdentityKey: latest.IdentityKey,
-                            FirmId: latest.FirmId,
-                            Latest: new Solicitor(
-                                FirmName: latest.FirmName,
-                                SearchedLocation: g.Key,
-                                Address: latest.Address,
-                                Town: latest.Town,
-                                Postcode: latest.Postcode,
-                                Phone: latest.Phone,
-                                WebsiteUrl: latest.WebsiteUrl,
-                                EnquiryUrl: latest.EnquiryUrl,
-                                ProfileUrl: latest.ProfileUrl,
-                                ReviewCount: null,
-                                Description: latest.Description,
-                                LogoUrl: latest.LogoUrl,
-                                Tier: ListingTier.Featured,
-                                ScrapedAtUtc: lastSeenAt),
-                            LastSeenAt: lastSeenAt,
-                            FirstSeenAt: firstSeenAt);
-                    })
-                    .ToList(),
-                StringComparer.OrdinalIgnoreCase);
-    }
 }
-

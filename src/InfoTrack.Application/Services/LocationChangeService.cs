@@ -50,7 +50,6 @@ public sealed class LocationChangeService(
                 locations.Add(new LocationChange(loc.Location, ComparabilityStatus.NoBaseline, null, [], []));
                 continue;
             }
-            // QUESTION: Why the baseline is recentSets[1]?
             var subjectSet  = recentSets[0];
             var baselineSet = recentSets[1];
 

@@ -21,7 +21,6 @@ public sealed class CurrentFirmsProjector(
     {
         var now = DateTimeOffset.UtcNow;
 
-        // 2 queries instead of 1 + 2N (one per location).
         var recentByLocation   = await sightings.GetRecentSightingsPerLocationAsync(now, K, ct);
         var allFirmsByLocation = await sightings.GetAllFirmLastSeenPerLocationAsync(ct);
 

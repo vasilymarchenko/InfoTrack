@@ -3,8 +3,7 @@ using InfoTrack.Application.DTOs;
 namespace InfoTrack.Application.Ports;
 
 /// <summary>
-/// Read-model port for per-location firm-sighting queries used by the FULL change-detection
-/// and projection services. Infrastructure implements alongside ISearchRunRepository.
+/// Read-model port for per-location firm-sighting queries used by the change-detection and projection services. 
 /// </summary>
 public interface ISightingRepository
 {
@@ -29,7 +28,6 @@ public interface ISightingRepository
     /// <summary>All review-count points for one firm, ordered by RunAtUtc ascending.</summary>
     Task<IReadOnlyList<ReviewPoint>> GetFirmReviewHistoryAsync(Guid firmId, CancellationToken ct);
 
-    // --- Batch variants used by CurrentFirmsProjector to avoid the N×2 query fan-out ---
 
     /// <summary>
     /// The most recent <paramref name="count"/> successful runs per location with

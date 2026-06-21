@@ -42,7 +42,7 @@ builder.Services.AddSingleton<IReportBuilder, ReportBuilder>();
 var cs = builder.Configuration.GetConnectionString("Postgres");
 builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(cs));
 builder.Services.AddScoped<ISearchRunRepository, EfSearchRunRepository>();
-builder.Services.AddScoped<ISightingRepository, EfSearchRunRepository>();
+builder.Services.AddScoped<ISightingRepository, EfSightingRepository>();
 builder.Services.AddSingleton<ChangeConfirmer>();
 builder.Services.AddScoped<LocationChangeService>();
 builder.Services.AddScoped<CurrentFirmsProjector>();
