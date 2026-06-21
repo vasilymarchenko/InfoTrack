@@ -5,6 +5,8 @@ using InfoTrack.Application.Services;
 using InfoTrack.Infrastructure;
 using InfoTrack.Infrastructure.Configuration;
 using InfoTrack.Infrastructure.Parsing;
+using InfoTrack.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 
@@ -34,6 +36,11 @@ builder.Services.AddSingleton<IListingParser, SolicitorsComConveyancingParser>()
 
 builder.Services.AddSingleton<IReportBuilder, ReportBuilder>();
 
+var cs = builder.Configuration.GetConnectionString("Postgres");
+builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(cs));
+builder.Services.AddScoped<ISearchRunRepository, EfSearchRunRepository>();
+builder.Services.AddSingleton<RunComparer>();
+
 // Scoped so it captures the scoped IListingFetcher (typed HttpClient) safely.
 builder.Services.AddScoped<ISolicitorSearchService, SolicitorSearchService>();
 
@@ -42,6 +49,13 @@ builder.Services.AddScoped<ISolicitorSearchService, SolicitorSearchService>();
 // builder.Services.AddCors(options => options.AddDefaultPolicy(policy => { ... }));
 
 var app = builder.Build();
+
+// Apply EF migrations on startup (for simplicity in this demo; consider more robust strategies for production apps).
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+}
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
