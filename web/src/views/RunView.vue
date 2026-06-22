@@ -118,7 +118,7 @@ const newFirmKeys = computed(() => {
         Results not saved — database was unavailable. Data shown below is still valid.
       </p>
       <ChangesBand v-if="changes" :changes="changes" />
-      <ReportView :report="response.report" />
+      <ReportView :report="response.report" :solicitors="response.result.uniqueSolicitors" />
       <LeadList :solicitors="response.result.uniqueSolicitors" :new-firm-keys="newFirmKeys" />
     </template>
   </div>
