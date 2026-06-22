@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using InfoTrack.Api;
 using InfoTrack.Application.Configuration;
 using InfoTrack.Application.Ports;
@@ -20,6 +21,9 @@ builder.Services.Configure<SearchServiceOptions>(
 
 builder.Services.Configure<ChangeDetectionOptions>(
     builder.Configuration.GetSection(ChangeDetectionOptions.SectionName));
+
+builder.Services.ConfigureHttpJsonOptions(o =>
+    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.Services.AddOpenApi();
 

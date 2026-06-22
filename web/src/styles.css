@@ -596,12 +596,38 @@ button {
   flex-direction: column;
   gap: var(--space-2);
 }
+.changes-section__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.changes-section__toggle:hover .changes-section__heading {
+  color: var(--color-accent);
+}
 .changes-section__heading {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  transition: color 0.15s;
+}
+.changes-section__chevron {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform 0.2s;
+  margin-top: -1px;
+}
+.changes-section__chevron--open {
+  transform: rotate(90deg);
 }
 .changes-list {
   list-style: none;
@@ -621,6 +647,12 @@ button {
 .changes-list__row:last-child { border-bottom: none; }
 .changes-list__row--absent .changes-list__name { color: var(--color-text-muted); text-decoration: line-through; }
 .changes-list__name { font-weight: 500; }
+.changes-list__name--link {
+  color: inherit;
+  text-decoration: none;
+}
+.changes-list__name--link:hover { color: var(--color-accent); }
+.changes-list__row--absent .changes-list__name--link:hover { text-decoration: line-through; }
 .changes-list__location { color: var(--color-text-muted); font-size: var(--text-xs); }
 .changes-band__footnote {
   display: flex;

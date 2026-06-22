@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { ChangesResponse, FirmChange } from '../lib/types'
 import StatusPill from './ui/StatusPill.vue'
 
 const props = defineProps<{ changes: ChangesResponse }>()
 
 interface FirmEntry { firm: FirmChange; location: string }
+
+const showNew    = ref(false)
+const showAbsent = ref(false)
 
 const comparable = computed(() =>
   props.changes.locations.filter(l => l.comparability === 'Comparable')
@@ -42,6 +45,10 @@ const reasonLabel: Record<string, string> = {
   NoBaseline: 'No baseline yet',
   ScrapeFailed: 'Scrape failed',
 }
+
+function firmUrl(firm: FirmChange): string | undefined {
+  return firm.firm.profileUrl ?? firm.firm.websiteUrl ?? undefined
+}
 </script>
 
 <template>
@@ -66,14 +73,24 @@ const reasonLabel: Record<string, string> = {
       </div>
 
       <div v-if="allNew.length > 0" class="changes-section">
-        <h3 class="changes-section__heading">New firms</h3>
-        <ul class="changes-list">
+        <button class="changes-section__toggle" @click="showNew = !showNew">
+          <span class="changes-section__heading">New firms ({{ allNew.length }})</span>
+          <span class="changes-section__chevron" :class="{ 'changes-section__chevron--open': showNew }">›</span>
+        </button>
+        <ul v-if="showNew" class="changes-list">
           <li
             v-for="{ firm, location } in allNew"
             :key="`new-${firm.firm.firmName}-${location}`"
             class="changes-list__row"
           >
-            <span class="changes-list__name">{{ firm.firm.firmName }}</span>
+            <a
+              v-if="firmUrl(firm)"
+              class="changes-list__name changes-list__name--link"
+              :href="firmUrl(firm)"
+              target="_blank"
+              rel="noopener noreferrer"
+            >{{ firm.firm.firmName }}</a>
+            <span v-else class="changes-list__name">{{ firm.firm.firmName }}</span>
             <span class="changes-list__location">{{ location }}</span>
             <StatusPill :status="firm.confidence" />
           </li>
@@ -81,14 +98,24 @@ const reasonLabel: Record<string, string> = {
       </div>
 
       <div v-if="allAbsent.length > 0" class="changes-section">
-        <h3 class="changes-section__heading">No longer listed</h3>
-        <ul class="changes-list">
+        <button class="changes-section__toggle" @click="showAbsent = !showAbsent">
+          <span class="changes-section__heading">No longer listed ({{ allAbsent.length }})</span>
+          <span class="changes-section__chevron" :class="{ 'changes-section__chevron--open': showAbsent }">›</span>
+        </button>
+        <ul v-if="showAbsent" class="changes-list">
           <li
             v-for="{ firm, location } in allAbsent"
             :key="`absent-${firm.firm.firmName}-${location}`"
             class="changes-list__row changes-list__row--absent"
           >
-            <span class="changes-list__name">{{ firm.firm.firmName }}</span>
+            <a
+              v-if="firmUrl(firm)"
+              class="changes-list__name changes-list__name--link"
+              :href="firmUrl(firm)"
+              target="_blank"
+              rel="noopener noreferrer"
+            >{{ firm.firm.firmName }}</a>
+            <span v-else class="changes-list__name">{{ firm.firm.firmName }}</span>
             <span class="changes-list__location">{{ location }}</span>
             <StatusPill :status="firm.confidence" />
           </li>
