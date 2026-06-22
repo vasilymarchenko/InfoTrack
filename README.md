@@ -1,12 +1,13 @@
 # InfoTrack Solicitor Intelligence Tool
 
-A .NET API that scrapes conveyancing solicitor listings from [solicitors.com](https://www.solicitors.com), de-duplicates firms across locations, and returns a structured report with sales insights (top firms by review count, multi-location chains, coverage gaps, contactability). Search runs are persisted to Postgres; subsequent calls can retrieve stored results, compare runs with confidence-rated change detection, or query the current state of every known firm.
+A .NET API + Vue 3 SPA that scrapes conveyancing solicitor listings from [solicitors.com](https://www.solicitors.com), de-duplicates firms across locations, and returns a structured report with sales insights (top firms by review count, multi-location chains, coverage gaps, contactability). Search runs are persisted to Postgres; subsequent calls can retrieve stored results, compare runs with confidence-rated change detection, or query the current state of every known firm. The SPA is co-hosted — served by the API as static files from `wwwroot` — so the whole stack runs from a single container with no CORS configuration needed.
 
 ## Prerequisites
 
 | Tool | Version |
 |------|---------|
 | [.NET SDK](https://dotnet.microsoft.com/download) | 10.x |
+| [Node.js](https://nodejs.org/) | 22.x (only needed for local SPA dev; Docker handles it automatically) |
 | [Docker Desktop](https://www.docker.com/products/docker-desktop/) | required for the Docker workflow |
 
 Outbound HTTPS to `www.solicitors.com` is required when calling `POST /api/searches` (parser tests run offline against saved HTML fixtures).
@@ -22,12 +23,15 @@ docker compose up --build
 `docker compose up` starts two services:
 
 1. **`db`** — Postgres 17. Data is stored in a named Docker volume (`pgdata`), so it survives container restarts.
-2. **`api`** — the .NET API. It waits for the `db` healthcheck to pass, then applies any pending EF migrations automatically on startup. No manual database setup is required.
+2. **`api`** — the .NET API with the pre-built Vue SPA bundled inside. It waits for the `db` healthcheck to pass, then applies any pending EF migrations automatically on startup. No manual database setup is required.
+
+The Docker build is multi-stage: a Node stage builds the SPA (`web/`), the .NET stage copies the compiled assets into `wwwroot/`, and publishes the API. The SPA and API share the same origin (`http://localhost:8080`), so no CORS configuration is needed.
 
 The API listens on **http://localhost:8080**.
 
 | URL | Purpose |
 |-----|---------|
+| http://localhost:8080/ | Vue SPA (solicitor search UI) |
 | http://localhost:8080/health | Liveness check |
 | http://localhost:8080/scalar/v1 | Interactive API docs (Scalar) |
 | http://localhost:8080/openapi/v1.json | OpenAPI document |
@@ -102,6 +106,27 @@ curl -X POST http://localhost:5194/api/searches \
 Replace port `5194` with `8080` when testing against the Docker container.
 
 More request examples are in `src/InfoTrack.Api/InfoTrack.Api.http`.
+
+### Run the SPA in dev mode
+
+The SPA uses Vite's dev server with a proxy so API calls are forwarded to the locally running API:
+
+```bash
+cd web
+npm install   # first time only
+npm run dev
+```
+
+The Vite dev server starts on **http://localhost:5173**. It proxies `/api` and `/health` requests to `http://localhost:5194`, so the API must already be running (see "Run the API" above).
+
+To build the SPA into the API's `wwwroot` for a local production-like test:
+
+```bash
+cd web
+npm run build   # outputs to ../src/InfoTrack.Api/wwwroot
+```
+
+Then run the API normally — it will serve the compiled SPA at its root.
 
 ## API endpoints
 

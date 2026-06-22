@@ -26,6 +26,8 @@ public class ReportBuilder : IReportBuilder
 
         var topFirms = unique
             .Where(s => s.ReviewCount.HasValue)
+            .GroupBy(s => FirmIdentity.NormaliseName(s.FirmName))
+            .Select(g => g.MaxBy(s => s.ReviewCount)!)
             .OrderByDescending(s => s.ReviewCount)
             .Take(10)
             .Select(s => new FirmRanking(s.FirmName, s.SearchedLocation, s.ReviewCount))

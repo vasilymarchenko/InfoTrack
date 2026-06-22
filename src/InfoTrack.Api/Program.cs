@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using InfoTrack.Api;
 using InfoTrack.Application.Configuration;
 using InfoTrack.Application.Ports;
@@ -20,6 +21,9 @@ builder.Services.Configure<SearchServiceOptions>(
 
 builder.Services.Configure<ChangeDetectionOptions>(
     builder.Configuration.GetSection(ChangeDetectionOptions.SectionName));
+
+builder.Services.ConfigureHttpJsonOptions(o =>
+    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.Services.AddOpenApi();
 
@@ -51,10 +55,6 @@ builder.Services.AddScoped<ReviewTrendService>();
 // Scoped so it captures the scoped IListingFetcher (typed HttpClient) safely.
 builder.Services.AddScoped<ISolicitorSearchService, SolicitorSearchService>();
 
-// CORS — not configured in Phase 1 (no browser client yet).
-// Configured in Phase 3 when the frontend is introduced.
-// builder.Services.AddCors(options => options.AddDefaultPolicy(policy => { ... }));
-
 var app = builder.Build();
 
 // Apply EF migrations on startup (for simplicity in this demo; consider more robust strategies for production apps).
@@ -75,6 +75,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapSearchEndpoints();
+
+app.MapFallbackToFile("index.html");
 
 app.Run();
