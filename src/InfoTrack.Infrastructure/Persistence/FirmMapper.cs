@@ -17,6 +17,6 @@ internal static class FirmMapper
         ReviewCount: s.ReviewCount,
         Description: s.Firm.Description,
         LogoUrl: s.Firm.LogoUrl,
-        Tier: ListingTier.Featured,   // Tier is not persisted; default to Featured on read-back
+        Tier: s.Tier,
         ScrapedAtUtc: scrapedAt);
 }

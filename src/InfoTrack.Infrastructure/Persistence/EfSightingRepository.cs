@@ -62,7 +62,8 @@ public sealed class EfSightingRepository(AppDbContext db) : ISightingRepository
                 f.FirmName, f.Address, f.Town, f.Postcode,
                 f.Phone, f.WebsiteUrl, f.EnquiryUrl, f.ProfileUrl,
                 f.Description, f.LogoUrl, f.FirstSeenAt,
-                RunAtUtc = run.RunAtUtc
+                RunAtUtc = run.RunAtUtc,
+                Tier = s.Tier
             }
         ).ToListAsync(ct);
 
@@ -89,7 +90,7 @@ public sealed class EfSightingRepository(AppDbContext db) : ISightingRepository
                         ReviewCount: null,
                         Description: latest.Description,
                         LogoUrl: latest.LogoUrl,
-                        Tier: ListingTier.Featured,
+                        Tier: latest.Tier,
                         ScrapedAtUtc: lastSeenAt),
                     LastSeenAt: lastSeenAt,
                     FirstSeenAt: firstSeenAt);
@@ -183,7 +184,8 @@ public sealed class EfSightingRepository(AppDbContext db) : ISightingRepository
                 f.FirmName, f.Address, f.Town, f.Postcode,
                 f.Phone, f.WebsiteUrl, f.EnquiryUrl, f.ProfileUrl,
                 f.Description, f.LogoUrl, f.FirstSeenAt,
-                RunAtUtc = run.RunAtUtc
+                RunAtUtc = run.RunAtUtc,
+                Tier = s.Tier
             }
         ).ToListAsync(ct);
 
@@ -214,7 +216,7 @@ public sealed class EfSightingRepository(AppDbContext db) : ISightingRepository
                                 ReviewCount: null,
                                 Description: latest.Description,
                                 LogoUrl: latest.LogoUrl,
-                                Tier: ListingTier.Featured,
+                                Tier: latest.Tier,
                                 ScrapedAtUtc: lastSeenAt),
                             LastSeenAt: lastSeenAt,
                             FirstSeenAt: firstSeenAt);

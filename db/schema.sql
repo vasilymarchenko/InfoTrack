@@ -117,5 +117,20 @@ BEGIN
     VALUES ('20260618123314_InitialCreate', '10.0.9');
     END IF;
 END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260622081919_AddSightingTier') THEN
+    ALTER TABLE "Sightings" ADD "Tier" text NOT NULL DEFAULT 'Featured';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260622081919_AddSightingTier') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260622081919_AddSightingTier', '10.0.9');
+    END IF;
+END $EF$;
 COMMIT;
 

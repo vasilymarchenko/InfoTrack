@@ -46,14 +46,15 @@ internal sealed class FirmEntity
     public List<SightingEntity> Sightings { get; set; } = [];
 }
 
-// One row per (run × location × firm). ReviewCount is captured per sighting
-// because it drives ranking and legitimately drifts between runs.
+// One row per (run × location × firm). ReviewCount and Tier are captured per sighting
+// because they drive ranking and legitimately drift between runs.
 internal sealed class SightingEntity
 {
     public Guid Id { get; set; }
     public Guid LocationOutcomeId { get; set; }
     public Guid FirmId { get; set; }
     public int? ReviewCount { get; set; }
+    public ListingTier Tier { get; set; }
     public LocationOutcomeEntity LocationOutcome { get; set; } = null!;
     public FirmEntity Firm { get; set; } = null!;
 }

@@ -80,5 +80,6 @@ internal sealed class SightingConfiguration : IEntityTypeConfiguration<SightingE
     public void Configure(EntityTypeBuilder<SightingEntity> builder)
     {
         builder.HasKey(s => s.Id);
+        builder.Property(s => s.Tier).HasConversion<string>();
     }
 }

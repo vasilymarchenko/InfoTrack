@@ -78,7 +78,8 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
                     {
                         Id = Guid.NewGuid(),
                         FirmId = existingFirmByKey[key].Id,
-                        ReviewCount = s.ReviewCount
+                        ReviewCount = s.ReviewCount,
+                        Tier = s.Tier
                     });
             }
 
