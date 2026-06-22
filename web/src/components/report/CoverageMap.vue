@@ -14,11 +14,6 @@ const sorted = computed(() =>
 <template>
   <div class="report-card card">
     <h3 class="report-card__title">Coverage</h3>
-    <p class="coverage-legend">
-      <span><b>Empty</b> = page loaded, no listings · try again later</span>
-      <span><b>Unavailable</b> = 404 · city not on solicitors.com</span>
-      <span><b>Error</b> = scrape failed · retry</span>
-    </p>
     <ul class="coverage-list">
       <li v-for="s in sorted" :key="s.location" class="coverage-list__row">
         <span class="coverage-list__location">{{ s.location }}</span>
