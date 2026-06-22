@@ -2,12 +2,30 @@ using InfoTrack.Application.DTOs;
 using InfoTrack.Application.Ports;
 using InfoTrack.Domain;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace InfoTrack.Infrastructure.Persistence;
 
 public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepository
 {
     public async Task<Guid> SaveAsync(SearchResult result, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            // Discard stale tracked entities so the next attempt re-reads from the DB
+            db.ChangeTracker.Clear();
+            try
+            {
+                return await SaveCoreAsync(result, ct);
+            }
+            // TODO: Leave as 3 attempts hardcoded for this MVP. Revisit later.
+            catch (DbUpdateException ex) when (attempt < 2 && IsFirmUniqueViolation(ex))
+            {
+            }
+        }
+    }
+
+    private async Task<Guid> SaveCoreAsync(SearchResult result, CancellationToken ct)
     {
         var runId = Guid.NewGuid();
         var runAtUtc = result.RunAtUtc.ToOffset(TimeSpan.Zero);
@@ -93,6 +111,9 @@ public sealed class EfSearchRunRepository(AppDbContext db) : ISearchRunRepositor
         await db.SaveChangesAsync(ct);
         return runId;
     }
+
+    private static bool IsFirmUniqueViolation(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
 
     public async Task<StoredRun?> GetAsync(Guid id, CancellationToken ct)
     {
