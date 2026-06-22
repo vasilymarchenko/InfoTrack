@@ -4,6 +4,7 @@ certs/*.crt
 ## Build
 [Bb]in/
 [Oo]bj/
+src/InfoTrack.Api/wwwroot/
 [Dd]ebug/
 [Rr]elease/
 x64/

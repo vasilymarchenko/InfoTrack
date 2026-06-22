@@ -1,3 +1,13 @@
+# --- Stage 1: build the Vue SPA ---
+FROM node:22-alpine AS web
+WORKDIR /web
+COPY web/package*.json ./
+RUN npm ci
+COPY web/ ./
+# DOCKER_BUILD=1 tells vite.config.ts to emit to ./dist instead of ../src/InfoTrack.Api/wwwroot
+RUN DOCKER_BUILD=1 npm run build
+
+# --- Stage 2: build the .NET API ---
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
@@ -9,6 +19,8 @@ COPY src/InfoTrack.Api/InfoTrack.Api.csproj src/InfoTrack.Api/
 RUN dotnet restore src/InfoTrack.Api/InfoTrack.Api.csproj
 
 COPY src/ src/
+# Inject the built SPA assets so they are published with the API
+COPY --from=web /web/dist src/InfoTrack.Api/wwwroot/
 
 RUN dotnet publish src/InfoTrack.Api/InfoTrack.Api.csproj \
     -c Release \
@@ -17,6 +29,13 @@ RUN dotnet publish src/InfoTrack.Api/InfoTrack.Api.csproj \
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
+
+# Npgsql loads libgssapi_krb5 for Kerberos/GSSAPI support; without it the
+# library logs a non-fatal error on every startup. Install the package so the
+# log stays clean. Password auth (used here) works either way.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Optional: trust extra CA certificates (e.g. a corporate SSL inspection proxy).
 # Drop any *.crt files (PEM format) into certs/ before building — they are gitignored.
