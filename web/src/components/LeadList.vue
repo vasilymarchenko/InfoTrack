@@ -24,7 +24,7 @@ const sorted = computed(() =>
   <section class="lead-list">
     <h2 class="section-title">
       Solicitors
-      <span class="count-badge">{{ solicitors.length }}</span>
+      <span class="count-badge">{{ sorted.length }}</span>
     </h2>
     <div class="lead-table-wrap">
       <table class="lead-table">

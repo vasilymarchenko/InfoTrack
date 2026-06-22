@@ -82,6 +82,7 @@ export interface SearchReport {
   topFirmsByReviewCount: TopFirm[];
   multiLocationFirms: MultiLocationFirm[];
   contactability: Contactability;
+  displaySolicitors: Solicitor[];
 }
 
 /** Shape of POST /api/searches and GET /api/searches/{id} */

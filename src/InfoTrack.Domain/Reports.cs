@@ -5,7 +5,8 @@ public record SearchReport(
     IReadOnlyList<LocationSummary> LocationSummaries,
     IReadOnlyList<FirmRanking> TopFirmsByReviewCount,
     IReadOnlyList<MultiLocationFirm> MultiLocationFirms,
-    Contactability Contactability);
+    Contactability Contactability,
+    IReadOnlyList<Solicitor> DisplaySolicitors);
 
 public record RunSummary(
     int TotalLocationsRequested,

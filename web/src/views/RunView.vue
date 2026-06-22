@@ -119,7 +119,7 @@ const newFirmKeys = computed(() => {
       </p>
       <ChangesBand v-if="changes" :changes="changes" />
       <ReportView :report="response.report" :solicitors="response.result.uniqueSolicitors" />
-      <LeadList :solicitors="response.result.uniqueSolicitors" :new-firm-keys="newFirmKeys" />
+      <LeadList :solicitors="response.report.displaySolicitors" :new-firm-keys="newFirmKeys" />
     </template>
   </div>
 </template>

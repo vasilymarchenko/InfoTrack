@@ -45,7 +45,13 @@ public class ReportBuilder : IReportBuilder
 
         var contactability = BuildContactability(unique);
 
-        return new SearchReport(summary, locationSummaries, topFirms, multiLocationFirms, contactability);
+        var displaySolicitors = unique
+            .GroupBy(s => $"{FirmIdentity.NormaliseName(s.FirmName)}|{s.SearchedLocation.Trim().ToLowerInvariant()}")
+            .Select(g => g.MaxBy(s => s.ReviewCount ?? -1)!)
+            .OrderByDescending(s => s.ReviewCount)
+            .ToList();
+
+        return new SearchReport(summary, locationSummaries, topFirms, multiLocationFirms, contactability, displaySolicitors);
     }
 
     private static Contactability BuildContactability(IReadOnlyList<Solicitor> firms)
